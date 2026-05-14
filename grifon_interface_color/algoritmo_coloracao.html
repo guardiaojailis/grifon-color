@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<body>
+	Algoritmo de coloração completo, com todas as funções e chamadas necessárias:
+
+	## **ALGORITMO DE COLORAÇÃO DE VÉRTICES (Welsh-Powell)**
+
+	```javascript
+	// ========== ALGORITMO DE COLORAÇÃO DE VÉRTICES ==========
+	function colorirVerticesWelshPowell() {
+	  const vertices = listVertices();
+	  if (vertices.length === 0) return { cores: {}, numCores: 0 };
+	  
+	  // 1. Calcular graus de cada vértice
+	  const graus = {};
+	  for (const v of vertices) {
+		const incidentes = new Set();
+		// Adiciona vértices que v aponta
+		for (const {to} of state.adj.get(v) || []) {
+		  incidentes.add(to);
+		}
+		// Adiciona vértices que apontam para v (para grafos orientados)
+		if (state.orientado) {
+		  for (const [u, lista] of state.adj.entries()) {
+			if (u !== v && lista.some(edge => edge.to === v)) {
+			  incidentes.add(u);
+			}
+		  }
+		}
+		graus[v] = incidentes.size;
+	  }
+	  
+	  // 2. Ordenar vértices por grau decrescente
+	  const verticesOrdenados = [...vertices].sort((a, b) => graus[b] - graus[a]);
+	  const cores = {};
+	  let corAtual = 0;
+	  
+	  // 3. Função para verificar adjacência
+	  function saoAdjacentes(u, v) {
+		if (u === v) return true;
+		// Verifica se u aponta para v
+		if ((state.adj.get(u) || []).some(({to}) => to === v)) return true;
+		// Se for orientado, também verifica se v aponta para u
+		if (state.orientado && (state.adj.get(v) || []).some(({to}) => to === u)) return true;
+		return false;
+	  }
+	  
+	  // 4. Algoritmo principal de coloração
+	  while (Object.keys(cores).length < vertices.length) {
+		corAtual++;
+		const primeiro = verticesOrdenados.find(v => cores[v] === undefined);
+		if (!primeiro) break;
+		cores[primeiro] = corAtual;
+		
+		for (const v of verticesOrdenados) {
+		  if (cores[v] !== undefined) continue;
+		  
+		  // Verifica se v é adjacente a algum vértice já colorido com a cor atual
+		  const adjacenteComMesmaCor = verticesOrdenados.some(u => {
+			return cores[u] === corAtual && saoAdjacentes(v, u);
+		  });
+		  
+		  if (!adjacenteComMesmaCor) {
+			cores[v] = corAtual;
+		  }
+		}
+	  }
+	  
+	  return { cores, numCores: corAtual };
+	}
+	```
+
+	## **ALGORITMO DE COLORAÇÃO DE ARESTAS**
+
+	```javascript
+	// ========== ALGORITMO DE COLORAÇÃO DE ARESTAS ==========
+	function colorirArestas() {
+	  const arestas = edges.get();
+	  if (arestas.length === 0) return { cores: {}, numCores: 0 };
+	  
+	  // 1. Mapear arestas incidentes a cada vértice
+	  const arestasPorVertice = {};
+	  for (const a of arestas) {
+		if (!arestasPorVertice[a.from]) arestasPorVertice[a.from] = [];
+		if (!arestasPorVertice[a.to]) arestasPorVertice[a.to] = [];
+		arestasPorVertice[a.from].push(a.id);
+		arestasPorVertice[a.to].push(a.id);
+	  }
+	  
+	  // 2. Construir adjacência entre arestas (compartilham vértice)
+	  const adjacenciaArestas = {};
+	  const grausArestas = {};
+	  for (const a of arestas) {
+		const adjacentes = new Set();
+		for (const id of arestasPorVertice[a.from] || []) if (id !== a.id) adjacentes.add(id);
+		for (const id of arestasPorVertice[a.to] || []) if (id !== a.id) adjacentes.add(id);
+		adjacenciaArestas[a.id] = Array.from(adjacentes);
+		grausArestas[a.id] = adjacentes.size;
+	  }
+	  
+	  // 3. Ordenar arestas por grau decrescente
+	  const arestasOrdenadas = [...arestas].sort((a,b) => grausArestas[b.id] - grausArestas[a.id]);
+	  const coresArestas = {};
+	  let corAtual = 0;
+	  
+	  // 4. Algoritmo de coloração para arestas
+	  while (Object.keys(coresArestas).length < arestas.length) {
+		corAtual++;
+		const primeira = arestasOrdenadas.find(a => coresArestas[a.id] === undefined);
+		if (!primeira) break;
+		coresArestas[primeira.id] = corAtual;
+		
+		for (const a of arestasOrdenadas) {
+		  if (coresArestas[a.id] !== undefined) continue;
+		  const adjacenteComMesmaCor = adjacenciaArestas[a.id]?.some(idAdj => coresArestas[idAdj] === corAtual);
+		  if (!adjacenteComMesmaCor) coresArestas[a.id] = corAtual;
+		}
+	  }
+	  
+	  return { cores: coresArestas, numCores: corAtual };
+	}
+	```
+
+	## **FUNÇÕES AUXILIARES PARA APLICAÇÃO DAS CORES**
+
+	```javascript
+	// ========== PALETAS DE CORES ==========
+	const PALETA_VERTICES = [
+	  '#EA4335', '#34A853', '#4285F4', '#FBBC05', '#FF00FF', '#FF9900', '#FF8000', '#7B0099',
+	  '#FF0080', '#80FF00', '#0080FF', '#FF8080', '#A4C639', '#00A1F1', '#FFFF80', '#FF80FF',
+	  '#80FFFF', '#FF4000', '#4000FF', '#FF0040'
+	];
+
+	const PALETA_ARESTAS = [
+	  '#EA4335', '#34A853', '#4285F4', '#FBBC05', '#FF00FF', '#00FFFF', '#FF9900', '#7B0099',
+	  '#FF0080', '#A4C639', '#00A1F1', '#FF4000', '#4000FF', '#FF0040', '#40FF00'
+	];
+
+	// ========== FUNÇÃO PARA CALCULAR COR DE CONTRASTE ==========
+	function getContrastColor(hexColor) {
+	  // Converte hex para RGB
+	  let r, g, b;
+	  if (hexColor.startsWith('#')) {
+		r = parseInt(hexColor.substr(1, 2), 16);
+		g = parseInt(hexColor.substr(3, 2), 16);
+		b = parseInt(hexColor.substr(5, 2), 16);
+	  } else {
+		return '#ffffff';
+	  }
+	  // Calcula luminância (fórmula de luminância relativa)
+	  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+	  // Retorna preto para cores claras, branco para cores escuras
+	  return luminance > 0.5 ? '#000000' : '#ffffff';
+	}
+
+	// ========== APLICAR CORES AOS VÉRTICES ==========
+	function aplicarCoresVertices(cores) {
+	  for (const [vertice, corIndex] of Object.entries(cores)) {
+		const cor = PALETA_VERTICES[(corIndex - 1) % PALETA_VERTICES.length];
+		nodes.update({ 
+		  id: vertice, 
+		  color: { 
+			background: cor, 
+			border: '#2C3E50', 
+			highlight: { background: cor, border: '#1A2634' }, 
+			hover: { background: cor, border: '#1A2634' } 
+		  },
+		  font: { color: getContrastColor(cor) }
+		});
+	  }
+	  console.log(`✅ Vértices coloridos com ${Object.keys(cores).length} vértices usando ${new Set(Object.values(cores)).size} cores.`);
+	}
+
+	// ========== APLICAR CORES ÀS ARESTAS ==========
+	function aplicarCoresArestas(cores) {
+	  for (const [arestaId, corIndex] of Object.entries(cores)) {
+		const cor = PALETA_ARESTAS[(corIndex - 1) % PALETA_ARESTAS.length];
+		edges.update({ 
+		  id: arestaId, 
+		  color: { color: cor, highlight: cor, hover: cor }, 
+		  width: 3 
+		});
+	  }
+	  console.log(`✅ Arestas coloridas com ${Object.keys(cores).length} arestas usando ${new Set(Object.values(cores)).size} cores.`);
+	}
+
+	// ========== RESETAR CORES ==========
+	function resetarCores() {
+	  nodes.update(nodes.get().map(n => ({ 
+		id: n.id, 
+		color: { 
+		  background: '#a5d8ff', 
+		  border: '#1971c2', 
+		  highlight: { background: '#74c0fc', border: '#0d6efd' }, 
+		  hover: { background: '#d0ebff', border: '#0d6efd' } 
+		},
+		font: { color: getContrastColor('#a5d8ff') }
+	  })));
+	  edges.update(edges.get().map(e => ({ 
+		id: e.id, 
+		color: { color: '#868e96', highlight: '#0d6efd', hover: '#0d6efd' }, 
+		width: 2 
+	  })));
+	  console.log('🔄 Cores resetadas para o padrão.');
+	}
+
+	// ========== COLORIR TUDO (VÉRTICES E ARESTAS) ==========
+	function colorirTudo() {
+	  if (state.vertices.size === 0) { 
+		alert('Crie vértices primeiro.'); 
+		return; 
+	  }
+	  
+	  const resultadoVertices = colorirVerticesWelshPowell();
+	  aplicarCoresVertices(resultadoVertices.cores);
+	  
+	  if (edges.get().length > 0) {
+		const resultadoArestas = colorirArestas();
+		aplicarCoresArestas(resultadoArestas.cores);
+		console.log(`🎨 Coloração completa: ${resultadoVertices.numCores} cores nos vértices, ${resultadoArestas.numCores} cores nas arestas.`);
+	  } else {
+		console.log(`🎨 Coloração completa: ${resultadoVertices.numCores} cores nos vértices.`);
+	  }
+	}
+	```
+
+	## **CHAMADAS DOS ALGORITMOS (Event Listeners)**
+
+	```javascript
+	// ========== BOTÕES DE CONTROLE ==========
+	// Colorir apenas vértices
+	$('btnColorirVertices').onclick = () => { 
+	  if (!state.isRunning && state.vertices.size) {
+		const resultado = colorirVerticesWelshPowell();
+		aplicarCoresVertices(resultado.cores);
+	  } else {
+		console.log('Não é possível colorir durante execução ou sem vértices.');
+	  }
+	};
+
+	// Colorir apenas arestas
+	$('btnColorirArestas').onclick = () => { 
+	  if (!state.isRunning && edges.get().length) {
+		const resultado = colorirArestas();
+		aplicarCoresArestas(resultado.cores);
+	  } else {
+		console.log('Não é possível colorir durante execução ou sem arestas.');
+	  }
+	};
+
+	// Colorir tudo (vértices e arestas)
+	$('btnColorirTudo').onclick = () => { 
+	  if (!state.isRunning) {
+		colorirTudo();
+	  } else {
+		console.log('Não é possível colorir durante execução.');
+	  }
+	};
+
+	// Resetar cores
+	$('btnColorirReset').onclick = () => { 
+	  if (!state.isRunning) {
+		resetarCores();
+	  } else {
+		console.log('Não é possível resetar durante execução.');
+	  }
+	};
+	```
+
+	## **RESUMO DO ALGORITMO**
+
+	### **Welsh-Powell para Vértices:**
+	1. **Ordenação**: Lista vértices em ordem decrescente de grau
+	2. **Coloração**: Atribui a menor cor disponível que não conflita com vizinhos já coloridos
+	3. **Complexidade**: O(n²) no pior caso, onde n é número de vértices
+
+	### **Coloração de Arestas:**
+	1. **Mapeamento**: Identifica arestas que compartilham vértices
+	2. **Ordenação**: Ordena arestas por grau decrescente
+	3. **Coloração**: Atribui cores evitando que arestas adjacentes tenham mesma cor
+
+	### **Características:**
+	- ✅ Suporte a grafos orientados e não orientados
+	- ✅ Cores contrastantes para melhor visualização
+	- ✅ Reset automático de cores
+	- ✅ Paletas pré-definidas com 20 cores para vértices e 15 para arestas
+
+</body>
+</html>

@@ -1,0 +1,12 @@
+6 10
+0 0
+A B
+A C
+B C
+V3 A
+V2 A
+V1 A
+V2 V1
+V2 V3
+V3 C
+B V1

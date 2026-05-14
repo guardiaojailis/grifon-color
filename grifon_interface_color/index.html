@@ -1,0 +1,2588 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Grifon - Grafo Interativo v3.2.0</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <script src="https://unpkg.com/cytoscape/dist/cytoscape.min.js"></script>
+  <link rel="shortcut icon" href="img/icon.png" type="image/x-icon">
+  <style>
+    /* ============ ESTILOS GLOBAIS ============ */
+    html, body { height: 100%; overflow: hidden; background: #f0f2f5; }
+    
+    /* Container do grafo */
+    #cy {
+      height: calc(90vh - 120px);
+      border: 2px solid #dee2e6;
+      border-radius: 16px;
+      background: linear-gradient(180deg, #ffffff 0%, #f8faff 100%);
+      position: relative;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.05);
+    }
+    
+    /* Área de logs original (oculta) */
+    #log {
+      height: 12vh;
+      overflow: auto;
+      background: #1e293b;
+      color: #a5f3fc;
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      font-size: 0.85rem;
+      padding: 0.75rem 1rem;
+      border-radius: 12px;
+      white-space: pre-wrap;
+      border: 1px solid #334155;
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+      display: none;
+    }
+    
+    /* Logo flutuante */
+    .grifon-bg {
+      position: absolute;
+      top: 11px;
+      right: 20px;
+      width: 110px;
+      height: 110px;
+      background-image: url('img/grifon.png');
+      background-repeat: no-repeat;
+      background-size: contain;
+      background-position: center;
+      z-index: 10;
+      pointer-events: none;
+    }
+    
+    /* Estilos auxiliares */
+    .small-label { font-size: 0.78rem; font-weight: 500; color: #334155; }
+    
+    /* Botão flutuante da sidebar */
+    .fab-button {
+      position: fixed;
+      top: 8px;
+      left: 16px;
+      z-index: 1085;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: #0d6efd;
+      border: none;
+      color: white;
+      box-shadow: 0 8px 20px rgba(13,110,253,0.3);
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.4rem;
+    }
+    .fab-button:hover { background: #0b5ed7; transform: scale(1.05); }
+    
+    /* Barra de ferramentas principal */
+    .toolbar-stage {
+      position: absolute;
+      top: 20px;
+      left: 16px;
+      z-index: 1040;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      background: rgba(255,255,255,0.95);
+      backdrop-filter: blur(10px);
+      border: 1px solid #e9ecef;
+      border-radius: 40px;
+      padding: 6px 10px;
+      box-shadow: 0 12px 28px rgba(0,0,0,0.08);
+    }
+    .mode-active {
+      background: #0d6efd !important;
+      color: white !important;
+      border-color: #0d6efd !important;
+    }
+    
+    /* Botões de algoritmo na toolbar */
+    .algo-buttons {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      z-index: 1050;
+      display: flex;
+      gap: 8px;
+      background: white;
+      padding: 8px 12px;
+      border-radius: 40px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+      border: 1px solid #dee2e6;
+    }
+    .btn-bfs {
+      background: #0d6efd;
+      color: white;
+      border: none;
+      padding: 0.4rem 1.2rem;
+      border-radius: 30px;
+      font-weight: 500;
+    }
+    .btn-dfs {
+      background: #ffc107;
+      color: #000;
+      border: none;
+      padding: 0.4rem 1.2rem;
+      border-radius: 30px;
+      font-weight: 500;
+    }
+    .btn-bfs:hover { background: #0b5ed7; }
+    .btn-dfs:hover { background: #ffca2c; }
+    .btn-bfs:disabled, .btn-dfs:disabled { opacity: 0.5; cursor: not-allowed; }
+    
+    /* Controle de velocidade */
+    .speed-control {
+      position: absolute;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1050;
+      background: white;
+      padding: 8px 16px;
+      border-radius: 40px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+      border: 1px solid #dee2e6;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      backdrop-filter: blur(8px);
+    }
+    .speed-control .btn-sm {
+      width: 36px;
+      height: 36px;
+      padding: 0;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #f8f9fa;
+      border: 1px solid #dee2e6;
+    }
+    .speed-value {
+      font-weight: 600;
+      color: #0d6efd;
+      min-width: 55px;
+      text-align: center;
+      font-size: 1rem;
+    }
+    
+    /* Menu de contexto (clique direito) */
+    .ctx-menu {
+      position: fixed;
+      z-index: 2000;
+      min-width: 220px;
+      background: white;
+      border: 1px solid #dee2e6;
+      border-radius: 16px;
+      box-shadow: 0 20px 35px rgba(0,0,0,0.2);
+      display: none;
+      overflow: hidden;
+      backdrop-filter: blur(10px);
+    }
+    .ctx-menu button {
+      width: 100%;
+      border: 0;
+      background: transparent;
+      text-align: left;
+      padding: 10px 16px;
+      font-size: 0.9rem;
+      transition: background 0.1s;
+    }
+    .ctx-menu button:hover { background: #f1f5ff; }
+    
+    /* Estilo para monoespaçado */
+    .mono { 
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      background: #f1f5f9;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      border: 1px solid #e2e8f0;
+    }
+    
+    /* Sidebar (offcanvas) */
+    .offcanvas { background: #ffffff; }
+    .info-card {
+      background: #f8f9fa;
+      border-radius: 16px;
+      padding: 0.75rem;
+      margin-bottom: 1rem;
+      border-left: 4px solid #0d6efd;
+    }
+    .info-card .small {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .info-card .value {
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+    
+    /* ============ PAINEL DE LOGS MELHORADO ============ */
+    .log-panel {
+      position: absolute;
+      bottom: 60px;
+      right: 20px;
+      width: 420px;
+      max-height: 400px;
+      min-height: 300px;
+      background: #1e293b;
+      color: #a5f3fc;
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      font-size: 0.8rem;
+      padding: 0;
+      border-radius: 16px;
+      border: 1px solid #334155;
+      box-shadow: 0 20px 35px rgba(0,0,0,0.35);
+      z-index: 1050;
+      overflow: hidden;
+      backdrop-filter: blur(8px);
+      display: flex;
+      flex-direction: column;
+    }
+    .log-panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 16px;
+      background: #0f172a;
+      border-bottom: 1px solid #334155;
+      border-radius: 16px 16px 0 0;
+      color: #94a3b8;
+      font-size: 0.8rem;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      cursor: move;
+      user-select: none;
+    }
+    .log-panel-header i { color: #38bdf8; }
+    .log-panel-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 16px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 0.78rem;
+      line-height: 1.5;
+    }
+    .log-panel-content::-webkit-scrollbar { width: 6px; }
+    .log-panel-content::-webkit-scrollbar-track { background: #1e293b; }
+    .log-panel-content::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+    .log-panel-content::-webkit-scrollbar-thumb:hover { background: #64748b; }
+    .log-panel-resize {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 8px;
+      height: 100%;
+      cursor: ew-resize;
+      z-index: 1;
+    }
+    .log-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .log-action-btn {
+      background: none;
+      border: none;
+      color: #94a3b8;
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      transition: all 0.2s;
+    }
+    .log-action-btn:hover {
+      color: #e2e8f0;
+      background: #334155;
+    }
+  </style>
+</head>
+<body>
+  <!-- Botão para abrir sidebar -->
+  <button class="fab-button" type="button" data-bs-toggle="offcanvas" data-bs-target="#graphSidebar" title="Abrir painel">
+    <i class="bi bi-layout-sidebar-inset"></i>
+  </button>
+
+  <!-- ============ SIDEBAR (OFFCANVAS) ============ -->
+  <div class="offcanvas offcanvas-start" data-bs-scroll="true" tabindex="-1" id="graphSidebar">
+    <div class="offcanvas-header border-bottom">
+      <h5 class="offcanvas-title text-primary fw-bold">
+        <i class="bi bi-diagram-3 me-2"></i> Grifon - Grafo Interativo
+        <span class="badge bg-secondary ms-2" id="badgeStats">V:0 E:0</span>
+      </h5>
+      <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+    </div>
+    
+    <div class="offcanvas-body">
+      <!-- Painel de informações do grafo -->
+      <div class="info-card">
+        <div class="d-flex justify-content-between">
+          <div><span class="small text-muted">VÉRTICES</span><br><span id="infoVertices" class="value">0</span></div>
+          <div><span class="small text-muted">ARESTAS</span><br><span id="infoArestas" class="value">0</span></div>
+          <div><span class="small text-muted">DENSIDADE</span><br><span id="infoDensidade" class="value">0.00</span></div>
+        </div>
+        <div class="d-flex justify-content-between mt-2">
+          <div><span class="small text-muted">GRAU MÉDIO</span><br><span id="infoGrauMedio" class="value">0.00</span></div>
+          <div><span class="small text-muted">COMPONENTES</span><br><span id="infoComponentes" class="value">0</span></div>
+        </div>
+      </div>
+
+      <!-- Configurações do grafo -->
+      <div class="row g-2 mb-3">
+        <div class="col-6">
+          <label class="form-label small-label fw-bold">Tipo</label>
+          <select class="form-select form-select-sm" id="selTipo">
+            <option value="naoorientado">Não orientado</option>
+            <option value="orientado">Orientado</option>
+          </select>
+        </div>
+        <div class="col-6">
+          <label class="form-label small-label fw-bold">Peso</label>
+          <select class="form-select form-select-sm" id="selPeso">
+            <option value="nao">Sem peso</option>
+            <option value="sim">Com peso</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Switches de configuração -->
+      <div class="mb-3">
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" id="swLoopAllowed">
+          <label class="form-check-label small-label" for="swLoopAllowed">Permitir loops</label>
+        </div>
+        <div class="form-check form-switch mt-1">
+          <input class="form-check-input" type="checkbox" id="swCurvedEdges" checked>
+          <label class="form-check-label small-label" for="swCurvedEdges">
+            <i class="bi bi-bezier2 me-1"></i> Arestas curvas (Bézier)
+          </label>
+        </div>
+        <div class="form-check form-switch mt-1">
+          <input class="form-check-input" type="checkbox" id="swDraggableCurves">
+          <label class="form-check-label small-label" for="swDraggableCurves">
+            <i class="bi bi-arrows-move me-1"></i> Arrastar curvas manualmente
+          </label>
+        </div>
+        <div class="form-check form-switch mt-1">
+          <input class="form-check-input" type="checkbox" id="swAutoFocus" checked>
+          <label class="form-check-label small-label" for="swAutoFocus">Centralizar no vértice atual</label>
+        </div>
+        <div class="form-check form-switch mt-1">
+          <input class="form-check-input" type="checkbox" id="swWholeGraph">
+          <label class="form-check-label small-label" for="swWholeGraph">Percorrer todo o grafo</label>
+        </div>
+      </div>
+
+      <hr>
+      <!-- Adicionar vértices em lote -->
+      <div class="mb-3">
+        <div class="fw-bold small mb-2">Vértices em lote</div>
+        <div class="input-group input-group-sm mb-2">
+          <input id="inpBatchN" type="number" class="form-control" min="1" max="200" value="5">
+          <select id="selBatchTipo" class="form-select">
+            <option value="alfabetico">A,B,C...</option>
+            <option value="numerico">0,1,2...</option>
+            <option value="prefixo">Prefixo</option>
+          </select>
+          <input id="inpPrefixo" type="text" class="form-control" value="V" style="max-width: 70px">
+          <button id="btnBatchAdd" class="btn btn-success"><i class="bi bi-plus-circle"></i></button>
+        </div>
+        <div class="input-group input-group-sm">
+          <input id="inpV" type="text" class="form-control" placeholder="ID vértice">
+          <button id="btnAddV" class="btn btn-outline-primary"><i class="bi bi-plus"></i></button>
+          <button id="btnRemV" class="btn btn-outline-danger"><i class="bi bi-dash"></i></button>
+        </div>
+      </div>
+
+      <hr>
+      <!-- Gerar arestas automaticamente -->
+      <div class="mb-3">
+        <div class="fw-bold small mb-2">Arestas automáticas</div>
+        <div class="row g-2">
+          <div class="col-6">
+            <select class="form-select form-select-sm" id="selAutoEdgesMode">
+              <option value="caminho">Caminho</option>
+              <option value="ciclo">Ciclo</option>
+              <option value="completo">Completo</option>
+              <option value="aleatorio">Aleatório</option>
+            </select>
+          </div>
+          <div class="col-6">
+            <input id="inpAutoEdgesM" type="number" class="form-control form-control-sm" min="0" value="6" placeholder="Qtd">
+          </div>
+          <div class="col-12 d-flex gap-2">
+            <button id="btnAutoEdges" class="btn btn-outline-success btn-sm flex-grow-1">
+              <i class="bi bi-shuffle"></i> Gerar
+            </button>
+            <button id="btnAutoEdgesClear" class="btn btn-outline-danger btn-sm">
+              <i class="bi bi-x-circle"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <hr>
+      <!-- Adicionar aresta individual -->
+      <div class="mb-3">
+        <div class="fw-bold small mb-2">Aresta individual</div>
+        <div class="input-group input-group-sm mb-2">
+          <input id="inpU" type="text" class="form-control" placeholder="de">
+          <span class="input-group-text">→</span>
+          <input id="inpW" type="text" class="form-control" placeholder="para">
+          <input id="inpPeso" type="number" class="form-control" placeholder="peso" style="max-width: 80px">
+        </div>
+        <div class="d-flex gap-2">
+          <button id="btnAddE" class="btn btn-outline-success btn-sm flex-grow-1"><i class="bi bi-plus"></i> Adicionar</button>
+          <button id="btnRemE" class="btn btn-outline-danger btn-sm flex-grow-1"><i class="bi bi-dash"></i> Remover</button>
+        </div>
+      </div>
+
+      <hr>
+      <!-- Executar BFS/DFS -->
+      <div class="mb-3">
+        <div class="fw-bold small mb-2">BFS / DFS</div>
+        <div class="input-group input-group-sm mb-2">
+          <input id="inpStart" type="text" class="form-control" placeholder="Origem">
+          <button id="btnBFS" class="btn btn-info"><i class="bi bi-arrow-clockwise"></i> BFS</button>
+          <button id="btnDFS" class="btn btn-warning"><i class="bi bi-arrow-repeat"></i> DFS</button>
+        </div>
+      </div>
+
+      <hr class="my-2">
+      <!-- Coloração do grafo -->
+      <div class="mb-2">
+        <div class="fw-bold small">Coloração Completa</div>
+        <div class="d-flex gap-2 mt-2">
+          <button id="btnColorirVertices" class="btn btn-outline-primary btn-sm flex-grow-1">
+            <i class="bi bi-palette"></i> Colorir Vértices
+          </button>
+          <button id="btnColorirArestas" class="btn btn-outline-success btn-sm flex-grow-1">
+            <i class="bi bi-palette-fill"></i> Colorir Arestas
+          </button>
+        </div>
+        <div class="d-flex gap-2 mt-2">
+          <button id="btnColorirTudo" class="btn btn-outline-warning btn-sm flex-grow-1">
+            <i class="bi bi-palette2"></i> Colorir Tudo
+          </button>
+          <button id="btnColorirReset" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-eraser"></i> Resetar Cores
+          </button>
+        </div>
+      </div>
+
+      <hr>
+      <!-- Modelos pré-definidos -->
+      <div class="mb-2">
+        <div class="fw-bold small mb-2">Modelos pré-definidos</div>
+        <div class="input-group input-group-sm">
+          <select id="selModelo" class="form-select">
+            <option value="vazio">Grafo vazio</option>
+            <option value="completo5">Grafo completo K5</option>
+            <option value="caminho5">Caminho P5</option>
+            <option value="ciclo5">Ciclo C5</option>
+            <option value="bipartido">Bipartido K3,3</option>
+            <option value="margaridas">Grafo Margaridas</option>
+            <option value="simples">Simples</option>
+          </select>
+          <button id="btnCarregarModelo" class="btn btn-primary"><i class="bi bi-database"></i> Carregar</button>
+        </div>
+      </div>
+
+      <hr>
+      <!-- Salvar/Carregar arquivo -->
+      <div class="mb-2">
+        <div class="fw-bold small mb-2">Arquivo .txt</div>
+        <div class="input-group input-group-sm">
+          <input id="inpFileName" type="text" class="form-control" value="grafo.txt">
+          <button id="btnSaveFile" class="btn btn-primary"><i class="bi bi-download"></i></button>
+          <input id="fileInput" type="file" class="form-control" accept=".txt" style="display:none;">
+          <button id="btnLoadFile" class="btn btn-secondary"><i class="bi bi-upload"></i></button>
+        </div>
+      </div>
+
+      <hr class="my-2">
+      <!-- Ações gerais -->
+      <div class="d-grid gap-2 mt-3">
+        <button class="btn btn-outline-dark btn-sm" id="btnStabilize"><i class="bi bi-magic"></i> Centralizar</button>
+        <button class="btn btn-outline-warning btn-sm" id="btnResetColors"><i class="bi bi-palette"></i> Limpar destaque</button>
+        <button class="btn btn-outline-danger btn-sm" id="btnClear"><i class="bi bi-trash"></i> Limpar tudo</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ CONTEÚDO PRINCIPAL ============ -->
+  <div class="container-fluid py-2" style="position: relative;">
+    <div class="d-flex align-items-center justify-content-end mt-5 mb-2">
+      <h5 class="m-0 text-primary me-auto">
+        <i class="bi bi-diagram-3 me-2"></i> Grifon - Editor de Grafos
+        <span class="badge bg-secondary ms-2" id="badgeStatsTop">V:0 E:0</span>
+      </h5>
+    </div>
+    <div class="grifon-bg"></div>
+
+    <div class="position-relative">
+      <!-- Barra de ferramentas -->
+      <div class="toolbar-stage">
+        <button id="modeAddVertex" class="btn btn-sm btn-outline-primary mode-active">
+          <i class="bi bi-node-plus"></i> Vértice
+        </button>
+        <button id="modeAddEdge" class="btn btn-sm btn-outline-success">
+          <i class="bi bi-bezier2"></i> Aresta
+        </button>
+        <button id="modeSelect" class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-cursor"></i> Selecionar
+        </button>
+      </div>
+
+      <!-- Botões BFS/DFS na toolbar -->
+      <div class="algo-buttons">
+        <input type="text" id="inpStartPalco" class="form-control form-control-sm" placeholder="Origem" style="width: 100px;" value="V1">
+        <button id="btnBFSPalco" class="btn btn-bfs btn-sm">
+          <i class="bi bi-arrow-clockwise"></i> BFS
+        </button>
+        <button id="btnDFSPalco" class="btn btn-dfs btn-sm">
+          <i class="bi bi-arrow-repeat"></i> DFS
+        </button>
+      </div>
+
+      <!-- Controle de velocidade -->
+      <div class="speed-control">
+        <span class="small fw-bold">Veloc.:</span>
+        <button id="btnSpeedDown" class="btn btn-outline-secondary btn-sm"><i class="bi bi-dash"></i></button>
+        <span id="speedValue" class="speed-value">650</span>
+        <span class="small">ms</span>
+        <button id="btnSpeedUp" class="btn btn-outline-secondary btn-sm"><i class="bi bi-plus"></i></button>
+        <button id="btnSpeedReset" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-counterclockwise"></i></button>
+      </div>
+
+      <!-- Container do grafo e painel de logs -->
+      <div class="card shadow-sm border-0">
+        <div class="card-body p-0">
+          <div id="cy"></div>
+
+          <!-- PAINEL DE LOGS -->
+          <div class="log-panel" id="logPanel">
+            <div class="log-panel-resize" id="logResize"></div>
+            <div class="log-panel-header" id="logHeader">
+              <span><i class="bi bi-terminal"></i> Console de Logs</span>
+              <div class="log-actions">
+                <button class="log-action-btn" id="btnClearLog" title="Limpar logs">
+                  <i class="bi bi-eraser"></i>
+                </button>
+                <button class="log-action-btn" id="btnToggleLog" title="Minimizar/Maximizar">
+                  <i class="bi bi-chevron-up"></i>
+                </button>
+                <span id="logTimestamp" style="font-size:0.7rem;">--:--:--</span>
+              </div>
+            </div>
+            <div class="log-panel-content" id="logPanelContent"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Rodapé -->
+    <div class="mt-2">
+      <div class="fw-bold small mb-1">
+        <div class="border rounded-pill px-3 py-1 bg-light">
+          <i class="bi bi-tag-fill text-primary"></i> 
+          <span id="versaoDisplay">v3.2.0-cytoscape</span>
+          <i class="bi bi-calendar3 ms-2 text-primary"></i> | <span>2026</span> | <span>Por Jailis Dourado</span>
+        </div>
+      </div>
+      <div id="log" style="display:none;"></div>
+    </div>
+  </div>
+
+  <!-- ============ MENU DE CONTEXTO ============ -->
+  <div id="ctxMenu" class="ctx-menu">
+    <button data-action="add-node"><i class="bi bi-plus-circle me-2"></i>Adicionar vértice aqui</button>
+    <button data-action="rename-node"><i class="bi bi-pencil-square me-2"></i>Renomear vértice</button>
+    <button data-action="delete-node"><i class="bi bi-trash me-2"></i>Excluir vértice</button>
+    <button data-action="start-edge"><i class="bi bi-bezier2 me-2"></i>Iniciar aresta</button>
+    <button data-action="edit-edge"><i class="bi bi-sliders me-2"></i>Editar aresta</button>
+    <button data-action="delete-edge"><i class="bi bi-x-circle me-2"></i>Excluir aresta</button>
+    <button data-action="cancel-edge"><i class="bi bi-backspace me-2"></i>Cancelar aresta</button>
+  </div>
+
+  <script>
+    (function(){
+      // ================================================================
+      // VERSÃO E CONFIGURAÇÕES INICIAIS
+      // ================================================================
+      const VERSAO = '3.2.0';
+      
+      // --- Helper para obter elementos DOM com segurança ---
+      const getEl = (id) => document.getElementById(id);
+      
+      // --- Referências dos logs ---
+      const logBox = getEl('log');
+      const logPanelContent = getEl('logPanelContent');
+      const logTimestamp = getEl('logTimestamp');
+      
+      /**
+       * Função de log unificada - registra mensagens com timestamp
+       * @param {string} mensagem - Texto a ser registrado
+       */
+      const log = (mensagem) => {
+        const timestamp = new Date().toLocaleTimeString();
+        const entradaLog = `[${timestamp}] ${mensagem}`;
+        
+        if (logBox) {
+          logBox.textContent += entradaLog + '\n';
+          logBox.scrollTop = logBox.scrollHeight;
+        }
+        
+        if (logPanelContent) {
+          logPanelContent.textContent += entradaLog + '\n';
+          logPanelContent.scrollTop = logPanelContent.scrollHeight;
+        }
+        
+        if (logTimestamp) {
+          logTimestamp.textContent = timestamp;
+        }
+      };
+
+      getEl('versaoDisplay').textContent = `v${VERSAO}-cytoscape`;
+      log(`🚀 Grifon v${VERSAO} inicializando...`);
+
+      // ================================================================
+      // INICIALIZAÇÃO DO CYTOSCAPE (BIBLIOTECA DE GRAFOS)
+      // ================================================================
+      const cy = cytoscape({
+        container: getEl('cy'),
+        style: [
+          {
+            selector: 'node',
+            style: {
+              'background-color': '#a5d8ff',
+              'border-color': '#1971c2',
+              'border-width': 2,
+              'label': 'data(id)',
+              'font-size': 12,
+              'font-family': 'Segoe UI, Poppins, Roboto, sans-serif',
+              'font-weight': 'bold',
+              'text-valign': 'center',
+              'text-halign': 'center',
+              'color': '#1e293b',
+              'width': 40,
+              'height': 40
+            }
+          },
+          {
+            selector: 'node:selected',
+            style: {
+              'background-color': '#74c0fc',
+              'border-color': '#0d6efd',
+              'border-width': 3
+            }
+          },
+          {
+            selector: 'edge',
+            style: {
+              'width': 2,
+              'line-color': '#868e96',
+              'target-arrow-color': '#868e96',
+              'target-arrow-shape': 'none',
+              'curve-style': 'bezier',
+              'control-point-step-size': 40,
+              'label': 'data(label)',
+              'font-size': 10,
+              'font-family': 'Segoe UI, Poppins, Roboto, sans-serif',
+              'text-opacity': 0
+            }
+          },
+          {
+            selector: 'edge:selected',
+            style: {
+              'width': 3,
+              'line-color': '#0d6efd',
+              'target-arrow-color': '#0d6efd'
+            }
+          },
+          {
+            selector: 'edge.show-label',
+            style: {
+              'text-opacity': 1,
+              'text-background-color': '#ffffff',
+              'text-background-opacity': 0.8,
+              'text-background-padding': '2px'
+            }
+          }
+        ],
+        layout: { name: 'preset' },
+        wheelSensitivity: 0.3,
+        pixelRatio: 2
+      });
+
+      // ================================================================
+      // ESTADO GLOBAL DA APLICAÇÃO
+      // ================================================================
+      const estado = {
+        orientado: false,           // true = grafo orientado (digrafo)
+        ponderado: false,           // true = arestas com peso
+        permitirLoops: false,       // true = permite laços (vértice conectado a si mesmo)
+        arestasCurvas: true,        // true = curvas de Bézier, false = retas
+        curvasArrastaveis: false,   // true = permite arrastar para ajustar curvatura
+        modo: 'vertex',             // 'vertex', 'edge' ou 'select'
+        arestaPendenteDe: null,     // ID do vértice origem durante criação de aresta
+        verticeSelecionadoId: null,
+        arestaSelecionadaId: null,
+        contadorVertices: 1,        // para geração automática de IDs (V1, V2, ...)
+        ctxVerticeId: null,         // vértice no clique direito
+        ctxArestaId: null,          // aresta no clique direito
+        ctxPosCanvas: null,         // posição do clique direito
+        executando: false,          // true = algoritmo em execução
+        idExecucao: 0,              // identificador único para cancelar execução
+        velocidade: 650             // atraso entre passos (ms)
+      };
+
+      // ================================================================
+      // FUNÇÕES DO PAINEL DE LOGS (redimensionar, minimizar, limpar)
+      // ================================================================
+      let redimensionando = false;
+      let inicioX, larguraInicial;
+
+      if (getEl('btnToggleLog')) {
+        getEl('btnToggleLog').addEventListener('click', () => {
+          const conteudo = getEl('logPanelContent');
+          const icone = getEl('btnToggleLog').querySelector('i');
+          
+          if (conteudo.style.display === 'none') {
+            conteudo.style.display = 'block';
+            icone.className = 'bi bi-chevron-up';
+            getEl('logPanel').style.maxHeight = '400px';
+          } else {
+            conteudo.style.display = 'none';
+            icone.className = 'bi bi-chevron-down';
+            getEl('logPanel').style.maxHeight = '50px';
+          }
+        });
+      }
+
+      if (getEl('btnClearLog')) {
+        getEl('btnClearLog').addEventListener('click', () => {
+          if (logPanelContent) logPanelContent.textContent = '';
+          if (logBox) logBox.textContent = '';
+          log('🗑️ Logs limpos.');
+        });
+      }
+
+      if (getEl('logResize')) {
+        getEl('logResize').addEventListener('mousedown', (e) => {
+          redimensionando = true;
+          inicioX = e.clientX;
+          larguraInicial = getEl('logPanel').offsetWidth;
+          document.body.style.cursor = 'ew-resize';
+          document.body.style.userSelect = 'none';
+        });
+      }
+
+      document.addEventListener('mousemove', (e) => {
+        if (!redimensionando) return;
+        const novaWidth = larguraInicial + (inicioX - e.clientX);
+        if (novaWidth >= 300 && novaWidth <= 800 && getEl('logPanel')) {
+          getEl('logPanel').style.width = novaWidth + 'px';
+        }
+      });
+
+      document.addEventListener('mouseup', () => {
+        if (redimensionando) {
+          redimensionando = false;
+          document.body.style.cursor = '';
+          document.body.style.userSelect = '';
+        }
+      });
+
+      // ================================================================
+      // FUNÇÕES AUXILIARES
+      // ================================================================
+      
+      /**
+       * Calcula cor de contraste (branca ou preta) para uma cor de fundo
+       * @param {string} corHex - Cor em formato hexadecimal (#RRGGBB)
+       * @returns {string} '#ffffff' ou '#000000'
+       */
+      function obterCorContraste(corHex) {
+        if (!corHex || !corHex.startsWith('#')) return '#ffffff';
+        const r = parseInt(corHex.slice(1,3), 16);
+        const g = parseInt(corHex.slice(3,5), 16);
+        const b = parseInt(corHex.slice(5,7), 16);
+        const luminosidade = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+        return luminosidade > 0.5 ? '#000000' : '#ffffff';
+      }
+
+      /**
+       * Retorna lista de IDs de todos os vértices
+       * @returns {string[]}
+       */
+      function obterVertices() {
+        return cy.nodes().map(no => no.id());
+      }
+
+      /**
+       * Constrói lista de adjacência do grafo
+       * @returns {Object} Objeto com vértices como chaves e arrays de vizinhos como valores
+       */
+      function obterListaAdjacencia() {
+        const adj = {};
+        cy.nodes().forEach(no => { adj[no.id()] = []; });
+        cy.edges().forEach(aresta => {
+          const origem = aresta.data('source');
+          const destino = aresta.data('target');
+          const peso = aresta.data('label') ? Number(aresta.data('label')) : null;
+          if (adj[origem]) adj[origem].push({ para: destino, peso: peso });
+          // Se não for orientado, adiciona também a aresta reversa
+          if (!estado.orientado && origem !== destino && adj[destino]) {
+            adj[destino].push({ para: origem, peso: peso });
+          }
+        });
+        return adj;
+      }
+
+      /**
+       * Atualiza todos os indicadores visuais (badges, info-card)
+       */
+      function atualizarIndicadores() {
+        const V = cy.nodes().length;
+        const E = cy.edges().length;
+        if (getEl('badgeStats')) getEl('badgeStats').textContent = `V:${V} E:${E}`;
+        if (getEl('badgeStatsTop')) getEl('badgeStatsTop').textContent = `V:${V} E:${E}`;
+        if (getEl('infoVertices')) getEl('infoVertices').textContent = V;
+        if (getEl('infoArestas')) getEl('infoArestas').textContent = E;
+        
+        if (V > 1 && getEl('infoDensidade')) {
+          const densidade = (estado.orientado ? E/(V*(V-1)) : (2*E)/(V*(V-1))).toFixed(4);
+          getEl('infoDensidade').textContent = densidade;
+          getEl('infoGrauMedio').textContent = (2*E/V).toFixed(2);
+        } else {
+          if (getEl('infoDensidade')) getEl('infoDensidade').textContent = '0.00';
+          if (getEl('infoGrauMedio')) getEl('infoGrauMedio').textContent = '0.00';
+        }
+        atualizarComponentesConexas();
+      }
+
+      /**
+       * Calcula e exibe o número de componentes conexas
+       */
+      function atualizarComponentesConexas() {
+        const visitados = new Set();
+        let componentes = 0;
+        const adj = obterListaAdjacencia();
+        for (const v of obterVertices()) {
+          if (!visitados.has(v)) {
+            componentes++;
+            const pilha = [v];
+            visitados.add(v);
+            while (pilha.length) {
+              const u = pilha.pop();
+              for (const {para} of adj[u] || []) {
+                if (!visitados.has(para)) {
+                  visitados.add(para);
+                  pilha.push(para);
+                }
+              }
+            }
+          }
+        }
+        if (getEl('infoComponentes')) getEl('infoComponentes').textContent = componentes;
+      }
+
+      /**
+       * Atualiza o estilo das arestas (curvatura, setas, rótulos)
+       */
+      function atualizarEstiloArestas() {
+        cy.edges().forEach(aresta => {
+          aresta.style('curve-style', estado.arestasCurvas ? 'bezier' : 'haystack');
+          if (estado.arestasCurvas) aresta.style('control-point-step-size', 40);
+          aresta.style('target-arrow-shape', estado.orientado ? 'triangle' : 'none');
+          const temRotulo = estado.ponderado && aresta.data('label') && aresta.data('label') !== '';
+          if (temRotulo) {
+            aresta.addClass('show-label');
+          } else {
+            aresta.removeClass('show-label');
+          }
+          aresta.style('label', temRotulo ? aresta.data('label') : '');
+        });
+      }
+
+      /**
+       * Habilita/desabilita controles durante execução de algoritmos
+       * @param {boolean} executando - true se algoritmo está rodando
+       */
+      function definirEstadoExecucao(executando) {
+        estado.executando = executando;
+        const botoes = ['modeAddVertex','modeAddEdge','modeSelect','btnBFS','btnDFS','btnBFSPalco','btnDFSPalco',
+                         'btnAddV','btnRemV','btnAddE','btnRemE','btnBatchAdd',
+                         'btnAutoEdges','btnAutoEdgesClear','btnClear','btnStabilize',
+                         'btnColorirVertices','btnColorirArestas','btnColorirTudo',
+                         'btnColorirReset','btnCarregarModelo','btnSaveFile','btnLoadFile'];
+        botoes.forEach(id => { 
+          const el = getEl(id); 
+          if(el) el.disabled = executando; 
+        });
+      }
+
+      // ================================================================
+      // OPERAÇÕES BÁSICAS DO GRAFO
+      // ================================================================
+      
+      /**
+       * Adiciona um novo vértice ao grafo
+       * @param {string} id - Identificador do vértice
+       * @param {Object} pos - Posição opcional {x, y}
+       */
+      function adicionarVertice(id, pos = null) {
+        if (estado.executando) return log('⛔ Operação bloqueada durante execução.');
+        id = String(id).trim();
+        if (!id) return alert('ID inválido.');
+        if (cy.getElementById(id).length > 0) return alert('Vértice já existe.');
+        
+        const posicao = (pos && Number.isFinite(pos.x) && Number.isFinite(pos.y)) 
+          ? pos 
+          : { x: 300 + Math.random() * 200, y: 200 + Math.random() * 200 };
+        
+        cy.add({ group: 'nodes', data: { id } }).position(posicao);
+        atualizarIndicadores();
+        log(`✅ Vértice ${id} adicionado.`);
+      }
+
+      /**
+       * Adiciona uma nova aresta ao grafo
+       * @param {string} u - Vértice origem
+       * @param {string} v - Vértice destino
+       * @param {number|null} peso - Peso da aresta (opcional)
+       * @param {boolean} mostrarLog - Se deve exibir mensagem no console
+       */
+      function adicionarAresta(u, v, peso = null, mostrarLog = true) {
+        if (estado.executando) return log('⛔ Operação bloqueada durante execução.');
+        u = String(u).trim();
+        v = String(v).trim();
+        
+        if (cy.getElementById(u).length === 0) return alert(`Vértice "${u}" não existe.`);
+        if (cy.getElementById(v).length === 0) return alert(`Vértice "${v}" não existe.`);
+        if (u === v && !estado.permitirLoops) return alert('Loops não são permitidos.');
+
+        const valorPeso = estado.ponderado && peso !== null && peso !== '' && !isNaN(Number(peso)) ? String(peso) : '';
+        const arestaId = `e_${u}_${v}_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
+        
+        cy.add({
+          group: 'edges',
+          data: { id: arestaId, source: u, target: v, label: valorPeso }
+        });
+        
+        atualizarEstiloArestas();
+        atualizarIndicadores();
+        if (mostrarLog) log(`✅ Aresta ${u} → ${v} adicionada.`);
+      }
+
+      /**
+       * Remove um vértice e todas as arestas incidentes
+       * @param {string} id - ID do vértice
+       * @param {boolean} confirmar - Se deve pedir confirmação
+       */
+      function removerVertice(id, confirmar = true) {
+        if (estado.executando) return log('⛔ Operação bloqueada durante execução.');
+        id = String(id).trim();
+        const no = cy.getElementById(id);
+        if (no.length === 0) return alert('Vértice não existe.');
+        if (confirmar && !confirm(`Remover vértice "${id}" e todas as arestas conectadas?`)) return;
+        cy.remove(no);
+        atualizarIndicadores();
+        log(`🗑️ Vértice ${id} removido.`);
+      }
+
+      /**
+       * Remove aresta pelo ID
+       * @param {string} arestaId - ID da aresta
+       */
+      function removerArestaPorId(arestaId) {
+        const aresta = cy.getElementById(arestaId);
+        if (aresta.length > 0) {
+          aresta.remove();
+          atualizarIndicadores();
+          log('🗑️ Aresta removida.');
+        }
+      }
+
+      /**
+       * Remove aresta entre dois vértices
+       * @param {string} u - Vértice origem
+       * @param {string} v - Vértice destino
+       */
+      function removerAresta(u, v) {
+        u = String(u).trim();
+        v = String(v).trim();
+        const aresta = cy.edges().filter(e => 
+          (e.data('source') === u && e.data('target') === v) ||
+          (!estado.orientado && e.data('source') === v && e.data('target') === u)
+        );
+        if (aresta.length === 0) return alert('Aresta não encontrada.');
+        aresta.remove();
+        atualizarIndicadores();
+        log(`🗑️ Aresta ${u} → ${v} removida.`);
+      }
+
+      /**
+       * Remove todos os elementos do grafo
+       */
+      function limparTudo() {
+        if (estado.executando) return log('⛔ Operação bloqueada durante execução.');
+        if (!confirm('Limpar todo o grafo?')) return;
+        cy.elements().remove();
+        estado.contadorVertices = 1;
+        limparCoresBusca();
+        atualizarIndicadores();
+        log('🗑️ Grafo limpo.');
+      }
+
+      // ================================================================
+      // GERENCIAMENTO DE MODOS (vértice, aresta, seleção)
+      // ================================================================
+      
+      /**
+       * Altera o modo de interação
+       * @param {string} modo - 'vertex', 'edge' ou 'select'
+       */
+      function definirModo(modo) {
+        if (estado.executando) return;
+        estado.modo = modo;
+        estado.arestaPendenteDe = null;
+        const btnVertice = getEl('modeAddVertex');
+        const btnAresta = getEl('modeAddEdge');
+        const btnSelecionar = getEl('modeSelect');
+        if (btnVertice) btnVertice.classList.toggle('mode-active', modo === 'vertex');
+        if (btnAresta) btnAresta.classList.toggle('mode-active', modo === 'edge');
+        if (btnSelecionar) btnSelecionar.classList.toggle('mode-active', modo === 'select');
+        log(`Modo: ${modo === 'vertex' ? 'Inserir vértice' : modo === 'edge' ? 'Inserir aresta' : 'Selecionar'}`);
+      }
+
+      /**
+       * Gera o próximo ID disponível para vértice (V1, V2, ...)
+       * @returns {string}
+       */
+      function proximoIdVertice() {
+        while (cy.getElementById(`V${estado.contadorVertices}`).length > 0) {
+          estado.contadorVertices++;
+        }
+        return `V${estado.contadorVertices++}`;
+      }
+
+      // ================================================================
+      // FUNÇÕES PARA BUSCA (BFS/DFS) - COM ANIMAÇÃO E LOGS DIDÁTICOS
+      // ================================================================
+      
+      /**
+       * Remove todos os destaques de cores da última busca
+       */
+      function limparCoresBusca() {
+        estado.idExecucao++;
+        cy.nodes().forEach(no => {
+          no.style('background-color', '#a5d8ff');
+          no.style('border-color', '#1971c2');
+        });
+        cy.edges().forEach(aresta => {
+          aresta.style('line-color', '#868e96');
+          aresta.style('target-arrow-color', '#868e96');
+          aresta.style('width', 2);
+        });
+      }
+
+      /**
+       * Centraliza a visualização no vértice atual (se opção ativada)
+       * @param {string} verticeId - ID do vértice
+       */
+      function centralizarNoVerticeSeAtivado(verticeId) {
+        const chaveAutoFocus = getEl('swAutoFocus');
+        if (!chaveAutoFocus || !chaveAutoFocus.checked) return;
+        cy.animate({ 
+          fit: { eles: cy.getElementById(verticeId), padding: 100 }, 
+          duration: 280 
+        });
+      }
+
+      /**
+       * Marca um vértice como visitado com cor apropriada
+       * @param {string} verticeId - ID do vértice
+       * @param {boolean} ehAtual - Se é o vértice sendo processado agora
+       * @param {boolean} componenteExtra - Se pertence a outra componente (busca em todo grafo)
+       */
+      function marcarVerticeVisitado(verticeId, ehAtual = false, componenteExtra = false) {
+        const corFundo = ehAtual ? '#81d4fa' : componenteExtra ? '#d6f5dd' : '#ffe082';
+        const corBorda = ehAtual ? '#0288d1' : componenteExtra ? '#2e7d32' : '#ff9800';
+        const no = cy.getElementById(verticeId);
+        if (no.length) {
+          no.style('background-color', corFundo);
+          no.style('border-color', corBorda);
+        }
+      }
+
+      /**
+       * Marca uma aresta como percorrida
+       * @param {string} u - Origem
+       * @param {string} v - Destino
+       * @param {boolean} primaria - Se é da componente principal
+       */
+      function marcarArestaPercorrida(u, v, primaria = true) {
+        const cor = primaria ? '#0288d1' : '#2e7d32';
+        const aresta = cy.edges().filter(e => 
+          (e.data('source') === u && e.data('target') === v) ||
+          (!estado.orientado && e.data('source') === v && e.data('target') === u)
+        );
+        if (aresta.length > 0) {
+          aresta.style('line-color', cor);
+          aresta.style('target-arrow-color', cor);
+          aresta.style('width', 4);
+        }
+      }
+
+      /**
+       * Constrói os passos da Busca em Largura (BFS) para animação
+       * @param {string} inicio - Vértice inicial
+       * @param {boolean} grafoInteiro - Se deve percorrer todo o grafo
+       * @returns {Object} { visitados, ordem, passos }
+       */
+      function construirPassosBFS(inicio, grafoInteiro) {
+        const visitados = new Set();
+        const ordem = [];
+        const passos = [];
+        const adj = obterListaAdjacencia();
+        const todosVertices = obterVertices();
+        
+        function bfsFonte(fonte, componenteExtra) {
+          const fila = [fonte];
+          visitados.add(fonte);
+          // Passo: descoberta do vértice fonte
+          passos.push({ 
+            tipo: 'descobrir', 
+            atual: fonte, 
+            estrutura: [...fila], 
+            ordem: [...ordem], 
+            mensagem: `Descoberto ${fonte}`,
+            componenteExtra 
+          });
+          
+          while (fila.length) {
+            const u = fila.shift();
+            ordem.push(u);
+            // Passo: visitando o vértice atual
+            passos.push({ 
+              tipo: 'visitar', 
+              atual: u, 
+              estrutura: [...fila], 
+              ordem: [...ordem], 
+              mensagem: `Visitando ${u}`,
+              componenteExtra 
+            });
+            
+            for (const {para} of adj[u] || []) {
+              if (!visitados.has(para)) {
+                visitados.add(para);
+                fila.push(para);
+                // Passo: enfileirando novo vértice
+                passos.push({ 
+                  tipo: 'aresta', 
+                  de: u, 
+                  para: para,
+                  atual: para, 
+                  estrutura: [...fila], 
+                  ordem: [...ordem], 
+                  mensagem: `Enfileirando ${para} (via ${u})`,
+                  componenteExtra 
+                });
+              }
+            }
+          }
+        }
+        
+        bfsFonte(inicio, false);
+        
+        // Se a opção "percorrer todo grafo" estiver ativada
+        if (grafoInteiro) {
+          for (const v of todosVertices) {
+            if (!visitados.has(v)) {
+              bfsFonte(v, true);
+            }
+          }
+        }
+        
+        return { visitados, ordem, passos };
+      }
+
+      /**
+       * Constrói os passos da Busca em Profundidade (DFS) para animação
+       * @param {string} inicio - Vértice inicial
+       * @param {boolean} grafoInteiro - Se deve percorrer todo o grafo
+       * @returns {Object} { visitados, ordem, passos }
+       */
+      function construirPassosDFS(inicio, grafoInteiro) {
+        const visitados = new Set();
+        const ordem = [];
+        const passos = [];
+        const adj = obterListaAdjacencia();
+        const todosVertices = obterVertices();
+        
+        function dfsFonte(fonte, componenteExtra) {
+          const pilha = [fonte];
+          // Passo: iniciando pilha
+          passos.push({ 
+            tipo: 'descobrir', 
+            atual: fonte, 
+            estrutura: [...pilha], 
+            ordem: [...ordem], 
+            mensagem: `Iniciando pilha em ${fonte}`,
+            componenteExtra 
+          });
+          
+          while (pilha.length) {
+            const u = pilha.pop();
+            
+            if (visitados.has(u)) {
+              // Passo: vértice já visitado (ignorar)
+              passos.push({ 
+                tipo: 'ignorar', 
+                atual: u, 
+                estrutura: [...pilha], 
+                ordem: [...ordem], 
+                mensagem: `${u} já visitado - ignorando`,
+                componenteExtra 
+              });
+              continue;
+            }
+            
+            visitados.add(u);
+            ordem.push(u);
+            // Passo: visitando vértice
+            passos.push({ 
+              tipo: 'visitar', 
+              atual: u, 
+              estrutura: [...pilha], 
+              ordem: [...ordem], 
+              mensagem: `Visitando ${u}`,
+              componenteExtra 
+            });
+            
+            // Empilha vizinhos em ordem reversa para manter ordem natural
+            for (const {para} of [...(adj[u] || [])].reverse()) {
+              if (!visitados.has(para)) {
+                pilha.push(para);
+                // Passo: empilhando novo vértice
+                passos.push({ 
+                  tipo: 'aresta', 
+                  de: u, 
+                  para: para,
+                  atual: para, 
+                  estrutura: [...pilha], 
+                  ordem: [...ordem], 
+                  mensagem: `Empilhando ${para} (via ${u})`,
+                  componenteExtra 
+                });
+              }
+            }
+          }
+        }
+        
+        dfsFonte(inicio, false);
+        
+        if (grafoInteiro) {
+          for (const v of todosVertices) {
+            if (!visitados.has(v)) {
+              dfsFonte(v, true);
+            }
+          }
+        }
+        
+        return { visitados, ordem, passos };
+      }
+
+      /**
+       * Delay assíncrono
+       * @param {number} ms - Milissegundos
+       */
+      const aguardar = ms => new Promise(resolver => setTimeout(resolver, ms));
+
+      /**
+       * Executa BFS ou DFS com animação
+       * @param {string} tipo - 'BFS' ou 'DFS'
+       * @param {string} inicio - Vértice inicial
+       */
+      async function executarBusca(tipo, inicio) {
+        inicio = String(inicio).trim();
+        
+        // Verifica se o vértice de início existe
+        if (cy.getElementById(inicio).length === 0) {
+          if (cy.nodes().length === 0) return alert('Crie vértices primeiro.');
+          inicio = obterVertices()[0];
+          log(`Origem não encontrada. Usando "${inicio}".`);
+        }
+        
+        definirEstadoExecucao(true);
+        limparCoresBusca();
+        const idExecucaoAtual = ++estado.idExecucao;
+        const percorrerGrafoInteiroCheckbox = getEl('swWholeGraph');
+        const grafoInteiro = percorrerGrafoInteiroCheckbox ? percorrerGrafoInteiroCheckbox.checked : false;
+        
+        // Constrói os passos da busca
+        const passosConstruidos = tipo === 'BFS' 
+          ? construirPassosBFS(inicio, grafoInteiro)
+          : construirPassosDFS(inicio, grafoInteiro);
+        
+        log(`${tipo} iniciado em ${inicio}${grafoInteiro ? ' (percorrendo todo o grafo)' : ''}.`);
+        log(`Total de passos da animação: ${passosConstruidos.passos.length}`);
+        
+        // Executa cada passo da animação
+        for (const passo of passosConstruidos.passos) {
+          if (idExecucaoAtual !== estado.idExecucao) {
+            log('Execução interrompida pelo usuário.');
+            definirEstadoExecucao(false);
+            return;
+          }
+          
+          if (passo.tipo === 'visitar' || passo.tipo === 'descobrir') {
+            marcarVerticeVisitado(passo.atual, passo.tipo === 'descobrir', passo.componenteExtra);
+            centralizarNoVerticeSeAtivado(passo.atual);
+          } else if (passo.tipo === 'aresta') {
+            marcarArestaPercorrida(passo.de, passo.para, !passo.componenteExtra);
+            marcarVerticeVisitado(passo.atual, false, passo.componenteExtra);
+            centralizarNoVerticeSeAtivado(passo.atual);
+          }
+          
+          // Log detalhado do passo atual
+          const estruturaStr = passo.estrutura.join(', ');
+          const ordemStr = passo.ordem.join(' → ');
+          log(`${tipo} | Passo: ${passo.mensagem} | Estrutura: [${estruturaStr || 'vazia'}] | Ordem: ${ordemStr || 'nenhum'}`);
+          
+          await aguardar(estado.velocidade);
+        }
+        
+        if (idExecucaoAtual !== estado.idExecucao) {
+          log('Execução interrompida pelo usuário.');
+          definirEstadoExecucao(false);
+          return;
+        }
+        
+        const coberturaTotal = passosConstruidos.visitados.size === cy.nodes().length;
+        log(`${tipo} concluído. Visitados: ${passosConstruidos.visitados.size}/${cy.nodes().length}. ${coberturaTotal ? '✓ Cobertura total do grafo!' : '⚠️ Apenas vértices alcançáveis a partir da origem.'}`);
+        definirEstadoExecucao(false);
+      }
+
+      // ================================================================
+      // ALGORITMOS DE COLORAÇÃO - VERSÃO MELHORADA
+      // ================================================================
+      
+      // Paletas de cores para vértices e arestas
+		// Paleta de cores para VÉRTICES - cores mais distintas e contrastantes
+		const PALETA_VERTICES = [
+			'#E63946', // Vermelho vibrante
+			'#2A9D8F', // Verde azulado
+			'#2874A6', // Azul médio
+			'#F4A261', // Laranja terroso (mais distinto do amarelo)
+			'#9B59B6', // Roxo médio
+			'#1ABC9C', // Turquesa
+			'#E67E22', // Laranja escuro (bem diferente do amarelo)
+			'#C0392B', // Vermelho escuro
+			'#16A085', // Verde água
+			'#2980B9', // Azul forte
+			'#F1C40F', // Amarelo dourado (único tom de amarelo)
+			'#8E44AD', // Roxo escuro
+			'#27AE60', // Verde esmeralda
+			'#D35400', // Laranja queimado
+			'#3498DB', // Azul claro
+			'#E91E63', // Rosa vibrante
+			'#00BCD4', // Ciano
+			'#FF5722', // Laranja intenso
+			'#673AB7', // Roxo profundo
+			'#4CAF50'  // Verde folha
+		];
+
+		// Paleta de cores para ARESTAS - cores vibrantes e bem diferenciadas
+		const PALETA_ARESTAS = [
+			'#E63946', // Vermelho
+			'#2A9D8F', // Verde azulado
+			'#2874A6', // Azul
+			'#F4A261', // Laranja
+			'#9B59B6', // Roxo
+			'#1ABC9C', // Turquesa
+			'#E67E22', // Laranja escuro
+			'#C0392B', // Vermelho escuro
+			'#16A085', // Verde água
+			'#2980B9', // Azul forte
+			'#F1C40F', // Amarelo
+			'#8E44AD', // Roxo escuro
+			'#27AE60', // Verde esmeralda
+			'#D35400', // Laranja queimado
+			'#3498DB', // Azul claro
+			'#E91E63', // Rosa
+			'#00BCD4', // Ciano
+			'#FF5722', // Laranja intenso
+			'#673AB7', // Roxo profundo
+			'#4CAF50', // Verde folha
+			'#FF6B35', // Laranja coral
+			'#5D576B'  // Cinza roxado
+		];
+      /**
+       * ALGORITMO DE WELSH-POWELL MELHORADO para coloração de vértices
+       * 
+       * Funcionamento:
+       * 1. Ordena os vértices por grau decrescente
+       * 2. Atribui a cor 1 ao primeiro vértice
+       * 3. Percorre a lista ordenada atribuindo a mesma cor a vértices não adjacentes
+       * 4. Repete com a próxima cor para os vértices restantes
+       * 
+       * Melhorias implementadas:
+       * - Otimização da verificação de adjacência usando conjuntos (Set)
+       * - Redução da complexidade de O(n³) para O(n²)
+       * - Pré-processamento das listas de adjacência
+       * 
+       * @returns {Object} { cores: { vertice: numeroCor }, numCores: quantidade }
+       */
+      /**
+	 * ALGORITMO DE WELSH-POWELL MELHORADO para coloração de vértices
+	 * 
+	 * Funcionamento correto:
+	 * 1. Ordena os vértices por grau decrescente
+	 * 2. Para cada vértice não colorido, atribui a menor cor disponível
+	 *    que não seja usada por nenhum de seus vizinhos
+	 * 
+	 * CORREÇÃO: O algoritmo anterior tinha um erro na verificação de conflito,
+	 * fazendo com que todos os vértices recebessem a mesma cor.
+	 * 
+	 * @returns {Object} { cores: { vertice: numeroCor }, numCores: quantidade }
+	 */
+	
+	function colorirVerticesWelshPowellMelhorado() {
+		const vertices = obterVertices();
+		if (vertices.length === 0) return { cores: {}, numCores: 0 };
+		
+		// --- Passo 1: Construir lista de adjacência como conjuntos ---
+		const adjList = obterListaAdjacencia();
+		const adjSet = {};
+		for (const v of vertices) {
+			adjSet[v] = new Set((adjList[v] || []).map(viz => viz.para));
+		}
+		
+		// --- Passo 2: Calcular graus e ordenar por grau decrescente ---
+		const graus = {};
+		for (const v of vertices) {
+			graus[v] = adjSet[v].size;
+		}
+		const verticesOrdenados = [...vertices].sort((a, b) => graus[b] - graus[a]);
+		
+		// --- Passo 3: Colorir cada vértice com a menor cor disponível ---
+		const cores = {};
+		let numCores = 0;
+		
+		for (const vertice of verticesOrdenados) {
+			// Cores proibidas (cores dos vizinhos já coloridos)
+			const coresProibidas = new Set();
+			
+			for (const vizinho of adjSet[vertice]) {
+				if (cores[vizinho]) {
+					coresProibidas.add(cores[vizinho]);
+				}
+			}
+			
+			// Encontra a menor cor disponível
+			let corEscolhida = 1;
+			while (coresProibidas.has(corEscolhida)) {
+				corEscolhida++;
+			}
+			
+			cores[vertice] = corEscolhida;
+			numCores = Math.max(numCores, corEscolhida);
+		}
+		
+		log(`🎨 Coloração de vértices concluída: ${numCores} cores necessárias.`);
+		return { cores, numCores };
+	}
+
+      /**
+       * ALGORITMO DE COLORAÇÃO DE ARESTAS (Vizing + Guloso otimizado)
+       * 
+       * Funcionamento:
+       * - Para grafos completos não orientados com número ímpar de vértices: usa algoritmo ótimo round-robin
+       * - Para os demais casos: usa algoritmo guloso baseado em grafo de incidência
+       * 
+       * O algoritmo guloso percorre as arestas ordenadas por grau de incidência
+       * e atribui a menor cor disponível que não conflita com arestas adjacentes.
+       * 
+       * @param {Object} coresVertices - Cores dos vértices (opcional, para coloração completa)
+       * @returns {Object} { cores: { arestaId: numeroCor }, numCores: quantidade }
+       */
+		function colorirArestasOtimizado(coresVertices = {}) {
+			const arestas = cy.edges();
+			if (arestas.length === 0) return { cores: {}, numCores: 0 };
+
+			const vertices = obterVertices();
+			const n = vertices.length;
+			const totalPossivel = estado.orientado ? n * (n - 1) : (n * (n - 1)) / 2;
+			const ehCompleto = (arestas.length === totalPossivel) && !estado.orientado;
+			
+			// Caso 1: Grafo completo ímpar - round-robin
+			if (ehCompleto && n > 1 && n % 2 === 1) {
+				log(`🎨 Grafo completo K${n} (ímpar) detectado - usando algoritmo round-robin ótimo.`);
+				return colorirArestasGrafoCompletoImpar(arestas, vertices, n);
+			}
+			
+			// Caso 2: Verificar se é bipartido
+			const bipartido = verificarBipartido();
+			if (bipartido.ehBipartido && arestas.length > 0) {
+				log(`🎨 Grafo bipartido detectado - usando algoritmo específico (Teorema de König).`);
+				return colorirArestasBipartido(arestas, vertices, { conjuntoA: bipartido.conjuntoA, conjuntoB: bipartido.conjuntoB });
+			}
+			
+			// Caso 3: Algoritmo guloso geral
+			log(`🎨 Aplicando algoritmo guloso para coloração de arestas...`);
+			return colorirArestasGulosoOtimizado(arestas, coresVertices);
+		}
+      
+      /**
+       * Algoritmo round-robin para coloração ótima de grafos completos com n ímpar
+       * Teorema: K_n com n ímpar tem índice cromático = n
+       * 
+       * @param {Object} arestas - Coleção de arestas do Cytoscape
+       * @param {string[]} vertices - Lista de vértices
+       * @param {number} n - Número de vértices
+       * @returns {Object} { cores: { arestaId: numeroCor }, numCores: n }
+       */
+      
+	  /**
+	 * Algoritmo round-robin para coloração ótima de grafos completos com n ímpar
+	 * Teorema: K_n com n ímpar tem índice cromático = n
+	 * 
+	 * CORREÇÃO: Garantir que TODAS as arestas sejam coloridas
+	 */
+	/**
+		 * Algoritmo round-robin para coloração ótima de grafos completos com n ímpar
+		 * Teorema: K_n com n ímpar tem índice cromático = n
+		 * 
+		 * CORREÇÃO: A rotação dos vértices estava incorreta
+		 */
+		function colorirArestasGrafoCompletoImpar(arestas, vertices, n) {
+			const cores = {};
+			
+			// Para K5 com vértices [A, B, C, D, E]
+			// O algoritmo correto: fixa um vértice e rotaciona os demais
+			const verticesFixos = [...vertices];
+			
+			// Para cada rodada (cada cor)
+			for (let cor = 1; cor <= n; cor++) {
+				// Emparelha os vértices: (v1 com v2), (v3 com v4), ... deixando um fixo
+				for (let i = 0; i < Math.floor(n / 2); i++) {
+					const v1 = verticesFixos[i];
+					const v2 = verticesFixos[n - 1 - i];
+					
+					// Encontra a aresta entre v1 e v2
+					const aresta = arestas.filter(e => 
+						(e.data('source') === v1 && e.data('target') === v2) ||
+						(e.data('source') === v2 && e.data('target') === v1)
+					);
+					
+					if (aresta.length > 0 && !cores[aresta[0].id()]) {
+						cores[aresta[0].id()] = cor;
+					}
+				}
+				
+				// Rotação: move o último vértice para a posição 1
+				// Exemplo para K5: [A, B, C, D, E] -> [E, A, B, C, D]
+				const ultimo = verticesFixos.pop();
+				verticesFixos.unshift(ultimo);
+			}
+			
+			// Verifica se todas as arestas foram coloridas
+			const numCoresDistintas = new Set(Object.values(cores)).size;
+			log(`🎨 Coloração de arestas (K${n} ímpar) concluída: ${Object.keys(cores).length}/${arestas.length} arestas coloridas com ${numCoresDistintas} cores.`);
+			
+			return { cores, numCores: numCoresDistintas };
+		}
+      
+      /**
+       * Algoritmo guloso otimizado para coloração de arestas
+       * - Constrói grafo de incidência entre arestas
+       * - Ordena arestas por grau de incidência decrescente
+       * - Atribui a menor cor disponível para cada aresta
+       * 
+       * @param {Object} arestas - Coleção de arestas do Cytoscape
+       * @param {Object} coresVertices - Cores dos vértices (opcional)
+       * @returns {Object} { cores: { arestaId: numeroCor }, numCores: quantidade }
+       */
+		/**
+		 * Algoritmo guloso otimizado para coloração de arestas
+		 * MELHORIA: Ordenação por grau decrescente + critério de desempate
+		 */
+		function colorirArestasGulosoOtimizado(arestas, coresVertices = {}) {
+			const arestasArray = arestas.toArray();
+			
+			if (arestasArray.length === 0) return { cores: {}, numCores: 0 };
+			
+			// --- Passo 1: Construir grafo de incidência ---
+			const incidencia = {};
+			const grauIncidente = {};
+			
+			for (const a of arestasArray) {
+				incidencia[a.id()] = new Set();
+				grauIncidente[a.id()] = 0;
+			}
+			
+			for (let i = 0; i < arestasArray.length; i++) {
+				const a = arestasArray[i];
+				const aSrc = a.data('source');
+				const aTgt = a.data('target');
+				
+				for (let j = i + 1; j < arestasArray.length; j++) {
+					const b = arestasArray[j];
+					const bSrc = b.data('source');
+					const bTgt = b.data('target');
+					
+					if (aSrc === bSrc || aSrc === bTgt || aTgt === bSrc || aTgt === bTgt) {
+						incidencia[a.id()].add(b.id());
+						incidencia[b.id()].add(a.id());
+						grauIncidente[a.id()]++;
+						grauIncidente[b.id()]++;
+					}
+				}
+			}
+			
+			// --- Passo 2: Ordenar por grau de incidência DECRESCENTE ---
+			const arestasOrdenadas = [...arestasArray].sort((a, b) => 
+				grauIncidente[b.id()] - grauIncidente[a.id()]
+			);
+			
+			// --- Passo 3: Atribuir cores ---
+			const cores = {};
+			let numCores = 0;
+			
+			for (const aresta of arestasOrdenadas) {
+				const proibidas = new Set();
+				
+				for (const vizId of incidencia[aresta.id()]) {
+					if (cores[vizId]) {
+						proibidas.add(cores[vizId]);
+					}
+				}
+				
+				let corEscolhida = 1;
+				while (proibidas.has(corEscolhida)) {
+					corEscolhida++;
+				}
+				
+				cores[aresta.id()] = corEscolhida;
+				if (corEscolhida > numCores) numCores = corEscolhida;
+			}
+			
+			const numCoresDistintas = new Set(Object.values(cores)).size;
+			const grauMaximo = Math.max(...obterVertices().map(v => (obterListaAdjacencia()[v] || []).length));
+			
+			log(`🎨 Coloração de arestas (guloso) concluída: ${numCoresDistintas} cores.`);
+			log(`   Teorema de Vizing: Δ ≤ χ' ≤ Δ+1, onde Δ = ${grauMaximo} (grau máximo)`);
+			log(`   Teorema de König (grafos bipartidos): χ' = Δ = ${grauMaximo}`);
+			
+			return { cores, numCores: numCoresDistintas };
+		}
+
+      /**
+       * Aplica as cores aos vértices no grafo
+       * @param {Object} cores - Mapeamento { verticeId: numeroCor }
+       */
+      function aplicarCoresVertices(cores) {
+        for (const [vertice, indiceCor] of Object.entries(cores)) {
+          const cor = PALETA_VERTICES[(indiceCor - 1) % PALETA_VERTICES.length];
+          const no = cy.getElementById(vertice);
+          if (no.length) {
+            no.style('background-color', cor);
+            no.style('border-color', '#2C3E50');
+            no.style('color', obterCorContraste(cor));
+          }
+        }
+        
+        const numCoresDistintas = new Set(Object.values(cores)).size;
+        log(`🎨 ${Object.keys(cores).length} vértices coloridos com ${numCoresDistintas} cores diferentes.`);
+      }
+
+      /**
+       * Aplica as cores às arestas no grafo
+       * @param {Object} cores - Mapeamento { arestaId: numeroCor }
+       */
+		function aplicarCoresArestas(cores) {
+			if (!cores || Object.keys(cores).length === 0) {
+				log('⚠️ Nenhuma cor para aplicar nas arestas.');
+				return;
+			}
+			
+			let aplicadas = 0;
+			for (const [idAresta, indiceCor] of Object.entries(cores)) {
+				const cor = PALETA_ARESTAS[(indiceCor - 1) % PALETA_ARESTAS.length];
+				const aresta = cy.getElementById(idAresta);
+				if (aresta.length) {
+					aresta.style('line-color', cor);
+					aresta.style('target-arrow-color', cor);
+					aresta.style('width', 3);
+					aplicadas++;
+				}
+			}
+			
+			const numCoresDistintas = new Set(Object.values(cores)).size;
+			// CORREÇÃO: Não logar aqui, pois a função chamadora já loga
+			// Esta linha será removida ou comentada:
+			// log(`🎨 ${aplicadas} arestas coloridas com ${numCoresDistintas} cores diferentes.`);
+		}
+
+      /**
+       * Reseta todas as cores para o padrão
+       */
+      function resetarCores() {
+        cy.nodes().forEach(no => {
+          no.style('background-color', '#a5d8ff');
+          no.style('border-color', '#1971c2');
+          no.style('color', '#1e293b');
+        });
+        cy.edges().forEach(aresta => {
+          aresta.style('line-color', '#868e96');
+          aresta.style('target-arrow-color', '#868e96');
+          aresta.style('width', 2);
+        });
+        log('🔄 Cores resetadas para o padrão.');
+      }
+
+      /**
+       * Colore vértices E arestas de forma coordenada
+       * As cores das arestas consideram as cores dos vértices incidentes
+       */
+      function colorirGrafoCompleto() {
+		if (cy.nodes().length === 0) {
+			alert('Crie vértices primeiro.');
+			return;
+		}
+		
+		log('🎨 Iniciando coloração completa do grafo (vértices + arestas)...');
+		
+		// Passo 1: Colorir vértices
+		const resultadoVertices = colorirVerticesWelshPowellMelhorado();
+		aplicarCoresVertices(resultadoVertices.cores);
+		
+		// Passo 2: Colorir arestas
+		if (cy.edges().length > 0) {
+			const resultadoArestas = colorirArestasOtimizado(resultadoVertices.cores);
+			
+			// VERIFICAÇÃO: Garantir que o resultado tem a estrutura correta
+			if (resultadoArestas && resultadoArestas.cores) {
+				aplicarCoresArestas(resultadoArestas.cores);
+				log(`✅ Coloração completa finalizada: ${resultadoVertices.numCores} cores para vértices, ${resultadoArestas.numCores} cores para arestas.`);
+			} else {
+				log('❌ Erro: Falha ao colorir arestas.');
+			}
+		} else {
+			log(`✅ Coloração de vértices finalizada: ${resultadoVertices.numCores} cores. (Sem arestas para colorir)`);
+		}
+	}
+	
+		/**
+		 * ALGORITMO ESPECÍFICO PARA GRAFOS BIPARTIDOS
+		 * Teorema de König: Para grafos bipartidos, o índice cromático χ' = Δ (grau máximo)
+		 * 
+		 * Implementação: Para K3,3, usa coloração explícita ótima
+		 * Para outros bipartidos, usa algoritmo guloso otimizado
+		 */
+		function colorirArestasBipartido(arestas, vertices, partes) {
+			const arestasArray = arestas.toArray();
+			const n = vertices.length;
+			const m = arestas.length;
+			
+			// Calcula o grau máximo
+			const adjList = obterListaAdjacencia();
+			const grauMaximo = Math.max(...vertices.map(v => (adjList[v] || []).length));
+			
+			// CASO ESPECIAL: K3,3 (grafo bipartido completo 3x3)
+			// Verifica se é K3,3: 6 vértices, 9 arestas, todos com grau 3
+			const todosGrau3 = vertices.every(v => (adjList[v] || []).length === 3);
+			const ehK33 = n === 6 && m === 9 && todosGrau3 && !estado.orientado;
+			
+			if (ehK33) {
+				log(`🎨 K3,3 detectado - usando coloração ótima específica (3 cores).`);
+				
+				// Para K3,3, a coloração ótima agrupa as arestas em 3 matchings perfeitos
+				const cores = {};
+				const verticesA = partes.conjuntoA;
+				const verticesB = partes.conjuntoB;
+				
+				// Ordena os vértices para ter consistência
+				verticesA.sort();
+				verticesB.sort();
+				
+				// Cor 1: (A1,B1), (A2,B2), (A3,B3)
+				// Cor 2: (A1,B2), (A2,B3), (A3,B1)
+				// Cor 3: (A1,B3), (A2,B1), (A3,B2)
+				const esquemaCores = [
+					[[0,0], [1,1], [2,2]],  // cor 1: diagonal principal
+					[[0,1], [1,2], [2,0]],  // cor 2: diagonal deslocada 1
+					[[0,2], [1,0], [2,1]]   // cor 3: diagonal deslocada 2
+				];
+				
+				for (let cor = 0; cor < 3; cor++) {
+					for (const [idxA, idxB] of esquemaCores[cor]) {
+						const verticeA = verticesA[idxA];
+						const verticeB = verticesB[idxB];
+						
+						// Encontra a aresta entre verticeA e verticeB
+						const aresta = arestasArray.find(e => 
+							(e.data('source') === verticeA && e.data('target') === verticeB) ||
+							(e.data('source') === verticeB && e.data('target') === verticeA)
+						);
+						
+						if (aresta) {
+							cores[aresta.id()] = cor + 1;
+						}
+					}
+				}
+				
+				const numCores = new Set(Object.values(cores)).size;
+				log(`🎨 Coloração de arestas (K3,3) concluída: ${Object.keys(cores).length}/9 arestas coloridas com ${numCores} cores (ótimo).`);
+				log(`   Teorema de König: χ' = Δ = 3`);
+				
+				return { cores, numCores: 3 };
+			}
+			
+			// Para outros grafos bipartidos, usa algoritmo guloso com ordenação inteligente
+			log(`🎨 Aplicando algoritmo guloso para grafo bipartido...`);
+			
+			// Ordena arestas por grau dos vértices (prioriza vértices com maior grau)
+			const arestasOrdenadas = [...arestasArray].sort((a, b) => {
+				const aGrau = Math.min(
+					(adjList[a.data('source')] || []).length,
+					(adjList[a.data('target')] || []).length
+				);
+				const bGrau = Math.min(
+					(adjList[b.data('source')] || []).length,
+					(adjList[b.data('target')] || []).length
+				);
+				return bGrau - aGrau;
+			});
+			
+			const cores = {};
+			
+			for (const aresta of arestasOrdenadas) {
+				const proibidas = new Set();
+				
+				// Verifica arestas adjacentes já coloridas
+				for (const outra of arestasArray) {
+					if (outra.id() === aresta.id()) continue;
+					
+					const compartilhamVertice = 
+						outra.data('source') === aresta.data('source') ||
+						outra.data('target') === aresta.data('target') ||
+						outra.data('source') === aresta.data('target') ||
+						outra.data('target') === aresta.data('source');
+					
+					if (compartilhamVertice && cores[outra.id()]) {
+						proibidas.add(cores[outra.id()]);
+					}
+				}
+				
+				let corEscolhida = 1;
+				while (proibidas.has(corEscolhida)) {
+					corEscolhida++;
+				}
+				
+				cores[aresta.id()] = corEscolhida;
+			}
+			
+			const numCoresDistintas = new Set(Object.values(cores)).size;
+			log(`🎨 Coloração de arestas (bipartido) concluída: ${Object.keys(cores).length}/${arestas.length} arestas coloridas com ${numCoresDistintas} cores.`);
+			log(`   Teorema de König: χ' = Δ = ${grauMaximo}`);
+			
+			if (numCoresDistintas === grauMaximo) {
+				log(`   ✅ Ótimo! Usou exatamente Δ = ${grauMaximo} cores.`);
+			} else if (numCoresDistintas === grauMaximo + 1) {
+				log(`   ✅ Dentro do limite do Teorema de Vizing (Δ+1 = ${grauMaximo + 1}).`);
+			}
+			
+			return { cores, numCores: numCoresDistintas };
+		}
+
+		/**
+		 * Encontra um emparelhamento máximo usando algoritmo guloso melhorado
+		 * @param {Array} arestas - Lista de arestas disponíveis
+		 * @param {Object} partes - Partições do grafo bipartido
+		 * @returns {Array} Lista de arestas que formam um emparelhamento
+		 */
+		/**
+		 * Encontra um emparelhamento máximo usando algoritmo guloso
+		 * Para K3,3, deve retornar 3 arestas por cor
+		 */
+		function encontrarEmparelhamentoMaximo(arestas, partes) {
+			if (arestas.length === 0) return [];
+			
+			const verticesUsadosA = new Set();
+			const verticesUsadosB = new Set();
+			const emparelhamento = [];
+			
+			// Faz várias passadas para maximizar o emparelhamento
+			let mudou = true;
+			while (mudou && emparelhamento.length < Math.min(partes.conjuntoA.length, partes.conjuntoB.length)) {
+				mudou = false;
+				
+				for (const aresta of arestas) {
+					const u = aresta.data('source');
+					const v = aresta.data('target');
+					
+					// Determina qual vértice está em qual partição
+					const uEstaEmA = partes.conjuntoA.includes(u);
+					const verticeA = uEstaEmA ? u : v;
+					const verticeB = uEstaEmA ? v : u;
+					
+					// Verifica se os vértices ainda estão disponíveis
+					if (!verticesUsadosA.has(verticeA) && !verticesUsadosB.has(verticeB)) {
+						// Verifica se esta aresta ainda não foi usada
+						const jaUsada = emparelhamento.some(e => e.id() === aresta.id());
+						if (!jaUsada) {
+							verticesUsadosA.add(verticeA);
+							verticesUsadosB.add(verticeB);
+							emparelhamento.push(aresta);
+							mudou = true;
+							break; // Reinicia a busca para tentar maximizar
+						}
+					}
+				}
+			}
+			
+			return emparelhamento;
+		}
+
+		/**
+		 * VERIFICA SE O GRAFO É BIPARTIDO
+		 * Usa BFS para colorir vértices com 2 cores
+		 * @returns {Object} { ehBipartido: boolean, conjuntoA: [], conjuntoB: [] }
+		 */
+		function verificarBipartido() {
+			const vertices = obterVertices();
+			if (vertices.length === 0) return { ehBipartido: true, conjuntoA: [], conjuntoB: [] };
+			
+			const adjList = obterListaAdjacencia();
+			const cor = {}; // 1 ou 2
+			const conjuntoA = [];
+			const conjuntoB = [];
+			
+			for (const inicio of vertices) {
+				if (cor[inicio]) continue;
+				
+				// BFS para colorir
+				const fila = [inicio];
+				cor[inicio] = 1;
+				conjuntoA.push(inicio);
+				
+				while (fila.length > 0) {
+					const u = fila.shift();
+					const corAtual = cor[u];
+					const corVizinho = corAtual === 1 ? 2 : 1;
+					
+					for (const {para} of (adjList[u] || [])) {
+						if (!cor[para]) {
+							cor[para] = corVizinho;
+							if (corVizinho === 1) conjuntoA.push(para);
+							else conjuntoB.push(para);
+							fila.push(para);
+						} else if (cor[para] === corAtual) {
+							// Encontrou aresta entre vértices da mesma cor - não é bipartido
+							return { ehBipartido: false, conjuntoA: [], conjuntoB: [] };
+						}
+					}
+				}
+			}
+			
+			return { ehBipartido: true, conjuntoA, conjuntoB };
+		}
+
+      // ================================================================
+      // MODELOS PRÉ-DEFINIDOS
+      // ================================================================
+      
+      /**
+       * Carrega um modelo de grafo pré-definido
+       * @param {string} tipo - Identificador do modelo
+       */
+      function carregarModelo(tipo) {
+        if (estado.executando) return log('⛔ Operação bloqueada durante execução.');
+        cy.elements().remove();
+        estado.contadorVertices = 1;
+        limparCoresBusca();
+        
+        const adicionarVertice = (id, x, y) => {
+          cy.add({ group: 'nodes', data: { id } }).position({ x, y });
+        };
+        const adicionarAresta = (u, v, peso = '1') => {
+          const idAresta = `e_${u}_${v}_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
+          cy.add({ group: 'edges', data: { id: idAresta, source: u, target: v, label: peso } });
+        };
+
+        if (tipo === 'vazio') {
+          log('📦 Grafo vazio carregado.');
+        } else if (tipo === 'completo5') {
+          const ids = ['A','B','C','D','E'];
+          ids.forEach((id, i) => {
+            const angulo = (i * 2 * Math.PI / 5) - Math.PI / 2;
+            adicionarVertice(id, 400 + 150 * Math.cos(angulo), 300 + 150 * Math.sin(angulo));
+          });
+          for (let i = 0; i < 5; i++) {
+            for (let j = i + 1; j < 5; j++) {
+              adicionarAresta(ids[i], ids[j], '1');
+            }
+          }
+          estado.ponderado = true;
+          if (getEl('selPeso')) getEl('selPeso').value = 'sim';
+          log('📦 K5 (grafo completo com 5 vértices) carregado.');
+        } else if (tipo === 'caminho5') {
+          ['A','B','C','D','E'].forEach((id, i) => adicionarVertice(id, 200 + i * 100, 300));
+          for (let i = 0; i < 4; i++) {
+            adicionarAresta(String.fromCharCode(65 + i), String.fromCharCode(66 + i), '1');
+          }
+          log('📦 P5 (caminho com 5 vértices) carregado.');
+        } else if (tipo === 'ciclo5') {
+          ['A','B','C','D','E'].forEach((id, i) => {
+            const angulo = (i * 2 * Math.PI / 5) - Math.PI / 2;
+            adicionarVertice(id, 400 + 150 * Math.cos(angulo), 300 + 150 * Math.sin(angulo));
+          });
+          for (let i = 0; i < 4; i++) {
+            adicionarAresta(String.fromCharCode(65 + i), String.fromCharCode(66 + i), '1');
+          }
+          adicionarAresta('E','A','1');
+          log('📦 C5 (ciclo com 5 vértices) carregado.');
+        } else if (tipo === 'bipartido') {
+          ['A1','A2','A3'].forEach((id, i) => adicionarVertice(id, 250, 200 + i * 80));
+          ['B1','B2','B3'].forEach((id, i) => adicionarVertice(id, 450, 200 + i * 80));
+          for (const esq of ['A1','A2','A3']) {
+            for (const dir of ['B1','B2','B3']) {
+              adicionarAresta(esq, dir, '1');
+            }
+          }
+          log('📦 K3,3 (grafo bipartido completo) carregado.');
+        } else if (tipo === 'simples') {
+          adicionarVertice('A', 250, 200);
+          adicionarVertice('B', 450, 200);
+          adicionarVertice('C', 450, 400);
+          adicionarVertice('D', 250, 400);
+          adicionarAresta('A','B','1');
+          adicionarAresta('B','C','1');
+          adicionarAresta('C','D','1');
+          adicionarAresta('D','A','1');
+          adicionarAresta('A','C','1');
+          log('📦 Grafo simples (quadrado com diagonal) carregado.');
+        } else if (tipo === 'margaridas') {
+          estado.orientado = true;
+          if (getEl('selTipo')) getEl('selTipo').value = 'orientado';
+          
+          const posicoes = {
+            'V1':[200,300],'V2':[100,150],'V3':[100,450],'V4':[50,300],'V5':[300,200],
+            'V6':[50,200],'V7':[250,150],'V8':[50,400],'V9':[250,450],'V10':[150,100],
+            'V11':[600,300],'V12':[500,200],'V13':[550,150],'V14':[650,150],'V15':[700,200],
+            'V16':[750,300],'V17':[700,400],'V18':[650,450],'V19':[550,450],'V20':[500,400]
+          };
+          
+          for (const [id, [x, y]] of Object.entries(posicoes)) {
+            adicionarVertice(id, x, y);
+          }
+          
+          const listaArestas = [
+            ['V1','V2'],['V2','V1'],['V1','V3'],['V3','V1'],['V1','V4'],['V4','V1'],
+            ['V1','V5'],['V5','V1'],['V1','V6'],['V6','V1'],['V1','V7'],['V7','V1'],
+            ['V1','V8'],['V8','V1'],['V1','V9'],['V9','V1'],['V1','V10'],['V10','V1'],
+            ['V1','V11'],['V11','V1'],['V11','V12'],['V12','V11'],['V11','V13'],['V13','V11'],
+            ['V11','V14'],['V14','V11'],['V11','V15'],['V15','V11'],['V11','V16'],['V16','V11'],
+            ['V11','V17'],['V17','V11'],['V11','V18'],['V18','V11'],['V11','V19'],['V19','V11'],
+            ['V11','V20'],['V20','V11']
+          ];
+          listaArestas.forEach(([u, v]) => adicionarAresta(u, v, '1'));
+          log('🌼 Modelo "Margaridas" carregado: 20 vértices, 38 arestas orientadas.');
+        }
+        
+        atualizarEstiloArestas();
+        atualizarIndicadores();
+        cy.fit(undefined, 50);
+        log(`📦 Modelo "${tipo}" carregado com sucesso!`);
+      }
+
+      // ================================================================
+      // EXPORTAÇÃO E IMPORTAÇÃO DE ARQUIVOS
+      // ================================================================
+      
+      /**
+       * Exporta o grafo para formato TXT
+       * @returns {string}
+       */
+      function exportarTxt() {
+        const linhas = [];
+        linhas.push(`${cy.nodes().length} ${cy.edges().length}`);
+        linhas.push(`${estado.orientado ? 1 : 0} ${estado.ponderado ? 1 : 0}`);
+        cy.edges().forEach(aresta => {
+          const u = aresta.data('source');
+          const v = aresta.data('target');
+          const l = aresta.data('label');
+          if (estado.ponderado && l) {
+            linhas.push(`${u} ${v} ${l}`);
+          } else {
+            linhas.push(`${u} ${v}`);
+          }
+        });
+        linhas.push('---');
+        cy.nodes().forEach(no => {
+          const p = no.position();
+          linhas.push(`${no.id()} ${Math.round(p.x)} ${Math.round(p.y)}`);
+        });
+        return linhas.join('\n');
+      }
+
+      /**
+       * Importa grafo a partir de arquivo TXT
+       * @param {string} texto - Conteúdo do arquivo
+       */
+      function importarTxt(texto) {
+        if (estado.executando) return log('⛔ Operação bloqueada durante execução.');
+        const linhas = String(texto).split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+        if (linhas.length < 2) return alert('Arquivo inválido.');
+        
+        // Linha 0: número de vértices e arestas
+        // Linha 1: orientado (0/1) e ponderado (0/1)
+        const [ostr, pstr] = linhas[1].split(/\s+/);
+        
+        cy.elements().remove();
+        estado.contadorVertices = 1;
+        estado.orientado = ostr === '1';
+        estado.ponderado = pstr === '1';
+        if (getEl('selTipo')) getEl('selTipo').value = estado.orientado ? 'orientado' : 'naoorientado';
+        if (getEl('selPeso')) getEl('selPeso').value = estado.ponderado ? 'sim' : 'nao';
+        
+        let secaoPosicoes = false;
+        const posicoes = {};
+        
+        for (let i = 2; i < linhas.length; i++) {
+          if (linhas[i] === '---') {
+            secaoPosicoes = true;
+            continue;
+          }
+          const partes = linhas[i].split(/\s+/);
+          if (!secaoPosicoes) {
+            if (partes.length < 2) continue;
+            if (cy.getElementById(partes[0]).length === 0) adicionarVertice(partes[0]);
+            if (cy.getElementById(partes[1]).length === 0) adicionarVertice(partes[1]);
+            adicionarAresta(partes[0], partes[1], partes[2] || null, false);
+          } else {
+            if (partes.length >= 3) {
+              posicoes[partes[0]] = { x: parseFloat(partes[1]), y: parseFloat(partes[2]) };
+            }
+          }
+        }
+        
+        for (const [id, pos] of Object.entries(posicoes)) {
+          const no = cy.getElementById(id);
+          if (no.length) no.position(pos);
+        }
+        
+        atualizarEstiloArestas();
+        atualizarIndicadores();
+        cy.fit(undefined, 50);
+        log(`📂 Arquivo carregado: ${cy.nodes().length} vértices, ${cy.edges().length} arestas.`);
+      }
+
+      // ================================================================
+      // EVENTOS DO CYTOSCAPE (interações com o grafo)
+      // ================================================================
+      
+      // Clique/tap no canvas
+      cy.on('tap', (e) => {
+        if (estado.executando) return;
+        const alvo = e.target;
+        
+        if (estado.modo === 'vertex' && alvo === cy) {
+          adicionarVertice(proximoIdVertice(), e.position);
+        } else if (estado.modo === 'edge' && alvo.isNode()) {
+          if (!estado.arestaPendenteDe) {
+            estado.arestaPendenteDe = alvo.id();
+            alvo.select();
+            log(`🔗 Origem selecionada: ${estado.arestaPendenteDe}. Clique no vértice de destino.`);
+          } else {
+            const origem = estado.arestaPendenteDe;
+            const destino = alvo.id();
+            estado.arestaPendenteDe = null;
+            adicionarAresta(origem, destino, null);
+            cy.elements().unselect();
+          }
+        }
+      });
+
+      // Seleção de vértices/arestas
+      cy.on('select', 'node', (e) => {
+        estado.verticeSelecionadoId = e.target.id();
+        estado.arestaSelecionadaId = null;
+      });
+      
+      cy.on('select', 'edge', (e) => {
+        estado.arestaSelecionadaId = e.target.id();
+        estado.verticeSelecionadoId = null;
+      });
+      
+      cy.on('unselect', () => {
+        estado.verticeSelecionadoId = null;
+        estado.arestaSelecionadaId = null;
+      });
+
+      // Menu de contexto (clique direito)
+      cy.on('cxttap', (e) => {
+        if (estado.executando) return;
+        const alvo = e.target;
+        estado.ctxVerticeId = alvo.isNode() ? alvo.id() : null;
+        estado.ctxArestaId = alvo.isEdge() ? alvo.id() : null;
+        estado.ctxPosCanvas = e.position;
+        
+        const menu = getEl('ctxMenu');
+        if (!menu) return;
+        menu.style.left = `${e.originalEvent.clientX}px`;
+        menu.style.top = `${e.originalEvent.clientY}px`;
+        menu.style.display = 'block';
+        
+        menu.querySelectorAll('button').forEach(botao => {
+          const acao = botao.dataset.action;
+          if (['rename-node','delete-node','start-edge'].includes(acao)) {
+            botao.style.display = estado.ctxVerticeId ? 'block' : 'none';
+          } else if (['edit-edge','delete-edge'].includes(acao)) {
+            botao.style.display = estado.ctxArestaId ? 'block' : 'none';
+          } else if (acao === 'add-node') {
+            botao.style.display = !estado.ctxVerticeId && !estado.ctxArestaId ? 'block' : 'none';
+          } else if (acao === 'cancel-edge') {
+            botao.style.display = estado.arestaPendenteDe ? 'block' : 'none';
+          }
+        });
+      });
+
+      // Arrastar para ajustar curvatura
+      cy.on('grab', 'edge', (e) => {
+        if (!estado.curvasArrastaveis || estado.executando) return;
+        log('↔️ Arrastando aresta para ajustar curvatura...');
+      });
+
+      cy.on('free', 'edge', (e) => {
+        if (!estado.curvasArrastaveis) return;
+        const aresta = e.target;
+        const posOrigem = aresta.source().position();
+        const posDestino = aresta.target().position();
+        const distancia = Math.sqrt(Math.pow(posDestino.x - posOrigem.x, 2) + Math.pow(posDestino.y - posOrigem.y, 2));
+        aresta.style('control-point-step-size', Math.max(20, distancia * 0.4));
+        log('✅ Curvatura da aresta ajustada.');
+      });
+
+      // Fechar menu de contexto ao clicar fora
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('#ctxMenu')) {
+          const menu = getEl('ctxMenu');
+          if (menu) menu.style.display = 'none';
+        }
+      });
+
+      // Ações do menu de contexto
+      if (getEl('ctxMenu')) {
+        getEl('ctxMenu').addEventListener('click', (e) => {
+          const botao = e.target.closest('button');
+          if (!botao) return;
+          const acao = botao.dataset.action;
+          
+          if (acao === 'add-node' && estado.ctxPosCanvas) {
+            adicionarVertice(proximoIdVertice(), estado.ctxPosCanvas);
+          } else if (acao === 'delete-node' && estado.ctxVerticeId) {
+            removerVertice(estado.ctxVerticeId);
+          } else if (acao === 'start-edge' && estado.ctxVerticeId) {
+            estado.arestaPendenteDe = estado.ctxVerticeId;
+            definirModo('edge');
+            log(`🔗 Iniciando aresta a partir de ${estado.ctxVerticeId}.`);
+          } else if (acao === 'delete-edge' && estado.ctxArestaId) {
+            removerArestaPorId(estado.ctxArestaId);
+          } else if (acao === 'cancel-edge') {
+            estado.arestaPendenteDe = null;
+            log('Criação de aresta cancelada.');
+          }
+          
+          const menu = getEl('ctxMenu');
+          if (menu) menu.style.display = 'none';
+        });
+      }
+
+      // Teclas de atalho
+      document.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Delete' && !estado.executando) {
+          if (estado.verticeSelecionadoId) {
+            removerVertice(estado.verticeSelecionadoId);
+          } else if (estado.arestaSelecionadaId) {
+            removerArestaPorId(estado.arestaSelecionadaId);
+          }
+        }
+        if (ev.ctrlKey && ev.shiftKey && ev.key === 'C') {
+          ev.preventDefault();
+          estado.arestasCurvas = !estado.arestasCurvas;
+          const chaveCurvas = getEl('swCurvedEdges');
+          if (chaveCurvas) chaveCurvas.checked = estado.arestasCurvas;
+          atualizarEstiloArestas();
+          log(`Arestas curvas: ${estado.arestasCurvas ? 'ativadas' : 'desativadas'}`);
+        }
+      });
+
+      // ================================================================
+      // CONFIGURAÇÃO DOS EVENTOS DA INTERFACE (UI BINDINGS)
+      // ================================================================
+      
+      // Configurações básicas
+      if (getEl('selTipo')) {
+        getEl('selTipo').addEventListener('change', () => {
+          estado.orientado = getEl('selTipo').value === 'orientado';
+          atualizarEstiloArestas();
+          log(`Tipo de grafo: ${estado.orientado ? 'Orientado (digrafo)' : 'Não orientado'}`);
+        });
+      }
+      
+      if (getEl('selPeso')) {
+        getEl('selPeso').addEventListener('change', () => {
+          estado.ponderado = getEl('selPeso').value === 'sim';
+          atualizarEstiloArestas();
+          log(`Arestas com peso: ${estado.ponderado ? 'sim' : 'não'}`);
+        });
+      }
+      
+      if (getEl('swLoopAllowed')) {
+        getEl('swLoopAllowed').addEventListener('change', () => {
+          estado.permitirLoops = getEl('swLoopAllowed').checked;
+          log(`Loops permitidos: ${estado.permitirLoops ? 'sim' : 'não'}`);
+        });
+      }
+      
+      if (getEl('swCurvedEdges')) {
+        getEl('swCurvedEdges').addEventListener('change', () => {
+          estado.arestasCurvas = getEl('swCurvedEdges').checked;
+          atualizarEstiloArestas();
+        });
+      }
+      
+      if (getEl('swDraggableCurves')) {
+        getEl('swDraggableCurves').addEventListener('change', () => {
+          estado.curvasArrastaveis = getEl('swDraggableCurves').checked;
+          log(`Arrastar curvas manualmente: ${estado.curvasArrastaveis ? 'ativado' : 'desativado'}`);
+        });
+      }
+
+      // Botões de vértices
+      if (getEl('btnAddV')) getEl('btnAddV').addEventListener('click', () => adicionarVertice(getEl('inpV').value));
+      if (getEl('btnRemV')) getEl('btnRemV').addEventListener('click', () => removerVertice(getEl('inpV').value));
+      
+      // Botões de arestas
+      if (getEl('btnAddE')) {
+        getEl('btnAddE').addEventListener('click', () => {
+          const peso = getEl('inpPeso').value;
+          adicionarAresta(getEl('inpU').value, getEl('inpW').value, peso || null);
+        });
+      }
+      if (getEl('btnRemE')) getEl('btnRemE').addEventListener('click', () => removerAresta(getEl('inpU').value, getEl('inpW').value));
+      
+      // Adicionar vértices em lote
+      if (getEl('btnBatchAdd')) {
+        getEl('btnBatchAdd').addEventListener('click', () => {
+          const quantidade = Number(getEl('inpBatchN').value);
+          const tipo = getEl('selBatchTipo').value;
+          const prefixo = getEl('inpPrefixo').value;
+          let contador = 0;
+          for (let i = 0; i < quantidade; i++) {
+            let id;
+            if (tipo === 'alfabetico') {
+              id = String.fromCharCode(65 + (i % 26));
+            } else if (tipo === 'numerico') {
+              id = String(i);
+            } else {
+              id = `${prefixo}${i}`;
+            }
+            if (cy.getElementById(id).length === 0) {
+              adicionarVertice(id);
+              contador++;
+            }
+          }
+          if (contador > 0) log(`📦 ${contador} vértices adicionados em lote.`);
+        });
+      }
+
+      // Gerar arestas automáticas
+      if (getEl('btnAutoEdges')) {
+        getEl('btnAutoEdges').addEventListener('click', () => {
+          const vertices = obterVertices();
+          if (vertices.length < 2) return alert('Crie pelo menos 2 vértices.');
+          const modo = getEl('selAutoEdgesMode').value;
+          let adicionadas = 0;
+          
+          if (modo === 'caminho') {
+            for (let i = 0; i < vertices.length - 1; i++) {
+              adicionarAresta(vertices[i], vertices[i + 1], null, false);
+              adicionadas++;
+            }
+          } else if (modo === 'ciclo') {
+            for (let i = 0; i < vertices.length - 1; i++) {
+              adicionarAresta(vertices[i], vertices[i + 1], null, false);
+              adicionadas++;
+            }
+            adicionarAresta(vertices[vertices.length - 1], vertices[0], null, false);
+            adicionadas++;
+          } else if (modo === 'completo') {
+            for (let i = 0; i < vertices.length; i++) {
+              for (let j = i + 1; j < vertices.length; j++) {
+                adicionarAresta(vertices[i], vertices[j], null, false);
+                adicionadas++;
+              }
+            }
+          } else if (modo === 'aleatorio') {
+            const m = Number(getEl('inpAutoEdgesM').value);
+            for (let k = 0; k < m; k++) {
+              const i = Math.floor(Math.random() * vertices.length);
+              const j = Math.floor(Math.random() * vertices.length);
+              if (i !== j || estado.permitirLoops) {
+                adicionarAresta(vertices[i], vertices[j], null, false);
+                adicionadas++;
+              }
+            }
+          }
+          atualizarIndicadores();
+          log(`🔗 ${adicionadas} arestas geradas automaticamente.`);
+        });
+      }
+      
+      if (getEl('btnAutoEdgesClear')) {
+        getEl('btnAutoEdgesClear').addEventListener('click', () => {
+          cy.edges().remove();
+          atualizarIndicadores();
+          log('🗑️ Todas as arestas removidas.');
+        });
+      }
+      
+      // Botões BFS/DFS
+      if (getEl('btnBFS')) getEl('btnBFS').addEventListener('click', () => executarBusca('BFS', getEl('inpStart').value));
+      if (getEl('btnDFS')) getEl('btnDFS').addEventListener('click', () => executarBusca('DFS', getEl('inpStart').value));
+      if (getEl('btnBFSPalco')) getEl('btnBFSPalco').addEventListener('click', () => executarBusca('BFS', getEl('inpStartPalco').value));
+      if (getEl('btnDFSPalco')) getEl('btnDFSPalco').addEventListener('click', () => executarBusca('DFS', getEl('inpStartPalco').value));
+      
+      // Botões de coloração
+      if (getEl('btnColorirVertices')) {
+        getEl('btnColorirVertices').addEventListener('click', () => {
+          if (!estado.executando && cy.nodes().length) {
+            const resultado = colorirVerticesWelshPowellMelhorado();
+            aplicarCoresVertices(resultado.cores);
+          } else {
+            log('❌ Não é possível colorir durante execução ou sem vértices.');
+          }
+        });
+      }
+      
+      if (getEl('btnColorirArestas')) {
+        getEl('btnColorirArestas').addEventListener('click', () => {
+          if (!estado.executando && cy.edges().length) {
+            const resultado = colorirArestasOtimizado({});
+            aplicarCoresArestas(resultado.cores);
+          } else {
+            log('❌ Não é possível colorir durante execução ou sem arestas.');
+          }
+        });
+      }
+      
+      if (getEl('btnColorirTudo')) {
+        getEl('btnColorirTudo').addEventListener('click', () => {
+          if (!estado.executando) colorirGrafoCompleto();
+          else log('❌ Não é possível colorir durante execução.');
+        });
+      }
+      
+      if (getEl('btnColorirReset')) {
+        getEl('btnColorirReset').addEventListener('click', () => {
+          if (!estado.executando) resetarCores();
+          else log('❌ Não é possível resetar cores durante execução.');
+        });
+      }
+      
+      // Modelos e arquivos
+      if (getEl('btnCarregarModelo')) getEl('btnCarregarModelo').addEventListener('click', () => carregarModelo(getEl('selModelo').value));
+      
+      if (getEl('btnSaveFile')) {
+        getEl('btnSaveFile').addEventListener('click', () => {
+          const blob = new Blob([exportarTxt()], { type: 'text/plain;charset=utf-8' });
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          link.download = getEl('inpFileName').value || 'grafo.txt';
+          link.click();
+          URL.revokeObjectURL(link.href);
+          log('💾 Arquivo salvo com sucesso.');
+        });
+      }
+      
+      if (getEl('btnLoadFile')) getEl('btnLoadFile').addEventListener('click', () => getEl('fileInput').click());
+      if (getEl('fileInput')) {
+        getEl('fileInput').addEventListener('change', (e) => {
+          const arquivo = e.target.files[0];
+          if (!arquivo) return;
+          const leitor = new FileReader();
+          leitor.onload = ev => importarTxt(ev.target.result);
+          leitor.readAsText(arquivo);
+          e.target.value = '';
+        });
+      }
+      
+      // Ações gerais
+      if (getEl('btnClear')) getEl('btnClear').addEventListener('click', limparTudo);
+      if (getEl('btnStabilize')) {
+        getEl('btnStabilize').addEventListener('click', () => {
+          cy.fit(undefined, 50);
+          log('📐 Visualização centralizada.');
+        });
+      }
+      
+      if (getEl('btnResetColors')) {
+        getEl('btnResetColors').addEventListener('click', () => {
+          limparCoresBusca();
+          log('🔄 Destaques de busca removidos.');
+        });
+      }
+
+      // Controle de velocidade
+      if (getEl('btnSpeedDown')) {
+        getEl('btnSpeedDown').addEventListener('click', () => {
+          estado.velocidade = Math.max(100, estado.velocidade - 50);
+          getEl('speedValue').textContent = estado.velocidade;
+          log(`Velocidade da animação: ${estado.velocidade}ms por passo`);
+        });
+      }
+      if (getEl('btnSpeedUp')) {
+        getEl('btnSpeedUp').addEventListener('click', () => {
+          estado.velocidade = Math.min(2000, estado.velocidade + 50);
+          getEl('speedValue').textContent = estado.velocidade;
+          log(`Velocidade da animação: ${estado.velocidade}ms por passo`);
+        });
+      }
+      if (getEl('btnSpeedReset')) {
+        getEl('btnSpeedReset').addEventListener('click', () => {
+          estado.velocidade = 650;
+          getEl('speedValue').textContent = 650;
+          log(`Velocidade da animação resetada para ${estado.velocidade}ms`);
+        });
+      }
+
+      // Botões de modo
+      if (getEl('modeAddVertex')) getEl('modeAddVertex').addEventListener('click', () => definirModo('vertex'));
+      if (getEl('modeAddEdge')) getEl('modeAddEdge').addEventListener('click', () => definirModo('edge'));
+      if (getEl('modeSelect')) getEl('modeSelect').addEventListener('click', () => definirModo('select'));
+
+      // ================================================================
+      // INICIALIZAÇÃO FINAL
+      // ================================================================
+      atualizarIndicadores();
+      definirModo('vertex');
+      definirEstadoExecucao(false);
+      log(`✅ Grifon v${VERSAO} pronto! Algoritmos de coloração melhorados implementados.`);
+      log(`📚 Algoritmos disponíveis: BFS (Busca em Largura), DFS (Busca em Profundidade), Welsh-Powell (coloração de vértices), Vizing/Guloso (coloração de arestas).`);
+    })();
+  </script>
+</body>
+</html>
