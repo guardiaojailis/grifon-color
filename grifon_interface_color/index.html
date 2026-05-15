@@ -15,7 +15,7 @@
     
     /* Container do grafo */
     #cy {
-      height: calc(90vh - 120px);
+      height: calc(95vh - 120px);
       border: 2px solid #dee2e6;
       border-radius: 16px;
       background: linear-gradient(180deg, #ffffff 0%, #f8faff 100%);
@@ -553,6 +553,7 @@
       </div>
 
       <!-- Controle de velocidade -->
+	  <!--
       <div class="speed-control">
         <span class="small fw-bold">Veloc.:</span>
         <button id="btnSpeedDown" class="btn btn-outline-secondary btn-sm"><i class="bi bi-dash"></i></button>
@@ -560,7 +561,7 @@
         <span class="small">ms</span>
         <button id="btnSpeedUp" class="btn btn-outline-secondary btn-sm"><i class="bi bi-plus"></i></button>
         <button id="btnSpeedReset" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-counterclockwise"></i></button>
-      </div>
+      </div> -->
 
       <!-- Container do grafo e painel de logs -->
       <div class="card shadow-sm border-0">
@@ -2078,10 +2079,10 @@
           if (getEl('selTipo')) getEl('selTipo').value = 'orientado';
           
           const posicoes = {
-            'V1':[200,300],'V2':[100,150],'V3':[100,450],'V4':[50,300],'V5':[300,200],
-            'V6':[50,200],'V7':[250,150],'V8':[50,400],'V9':[250,450],'V10':[150,100],
-            'V11':[600,300],'V12':[500,200],'V13':[550,150],'V14':[650,150],'V15':[700,200],
-            'V16':[750,300],'V17':[700,400],'V18':[650,450],'V19':[550,450],'V20':[500,400]
+            'V1':[200,300],'V2':[100,155],'V3':[140,455],'V4':[30,310],'V5':[315,200],
+            'V6':[45,220],'V7':[250,150],'V8':[50,400],'V9':[250,450],'V10':[175,135],
+            'V11':[600,300],'V12':[500,200],'V13':[565,150],'V14':[655,155],'V15':[730,205],
+            'V16':[755,300],'V17':[725,400],'V18':[655,450],'V19':[560,450],'V20':[500,400]
           };
           
           for (const [id, [x, y]] of Object.entries(posicoes)) {
