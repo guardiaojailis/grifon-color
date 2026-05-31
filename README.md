@@ -1,6 +1,3 @@
-Aqui está o texto atualizado para a versão 3.6.0:
-
----
 
 # 🧩 Grifon - Grafo Interativo v3.6.0
 
