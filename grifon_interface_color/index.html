@@ -951,6 +951,7 @@
         constructor() {
           this.cy = null;                        // Instância do Cytoscape
           this.historico = new GerenciadorHistorico();  // Gerenciador de undo/redo
+          this.estadoBackup = null;               // Backup para restauração em caso de erro
           
           // Estado atual da aplicação (todas as configurações e seleções)
           this.estado = {
@@ -992,12 +993,25 @@
             registrarLog(`📚 Algoritmos: Welsh-Powell (vértices) | Round-Robin para K ímpar | Guloso (arestas)`);
             registrarLog(`🖱️ Clique direito para menu | Duplo clique na aresta para editar peso`);
             registrarLog(`⌨️ Ctrl+Z: Desfazer | Ctrl+Y: Refazer | Delete: Remover | Esc: Cancelar`);
+            registrarLog(`📊 Limite máximo de vértices: ${MAXIMO_VERTICES}`);
             
             exibirNotificacao('Grifon pronto para uso!', NOTIFICACAO.SUCESSO);
           } catch (erro) {
             console.error('Erro na inicialização:', erro);
             exibirNotificacao('Erro ao inicializar o Grifon', NOTIFICACAO.ERRO);
           }
+        }
+
+        /**
+         * Verifica se o limite de vértices foi atingido
+         * @returns {boolean} true se o limite foi atingido
+         */
+        isLimiteVerticesAtingido() {
+          const limiteAtingido = this.cy.nodes().length >= MAXIMO_VERTICES;
+          if (limiteAtingido) {
+            exibirNotificacao(`Limite de ${MAXIMO_VERTICES} vértices atingido!`, NOTIFICACAO.AVISO);
+          }
+          return limiteAtingido;
         }
 
         /**
@@ -1247,13 +1261,13 @@
             return false;
           }
 
-          // Verifica arestas duplicadas (apenas para grafos orientados)
+          // Verifica arestas duplicadas
           const arestaDuplicada = this.cy.edges().filter(e => 
             (e.data('source') === origem && e.data('target') === destino) ||
             (!this.estado.orientado && e.data('source') === destino && e.data('target') === origem)
           );
 
-          if (arestaDuplicada.length && this.estado.orientado) {
+          if (arestaDuplicada.length) {
             exibirNotificacao(`Aresta ${origem}→${destino} já existe`, NOTIFICACAO.AVISO);
             return false;
           }
@@ -1486,9 +1500,8 @@
          * 
          * Funcionamento:
          * - Funciona apenas para grafos completos K_n com n ímpar
-         * - Organiza vértices em círculo e um no centro
+         * - Organiza vértices em círculo
          * - Cada rodada (cor) emparelha vértices opostos
-         * - O vértice central "descansa" a cada rodada
          * - Rotação circular garante que todas as arestas sejam coloridas
          * 
          * Resultado ótimo: χ'(K_n) = n para n ímpar
@@ -1505,10 +1518,10 @@
           // Para K_n ímpar, precisamos exatamente de n cores
           for (let cor = 1; cor <= n; cor++) {
             // Emparelha vértices opostos no círculo
-            // O vértice na posição 0 fica sem par nesta rodada
+            // Todos os vértices participam do emparelhamento
             for (let i = 0; i < Math.floor(n / 2); i++) {
-              const v1 = circulo[i + 1];          // Pula o primeiro vértice (centro)
-              const v2 = circulo[n - 1 - i];      // Vértice oposto
+              const v1 = circulo[i];
+              const v2 = circulo[n - 1 - i];
               
               // Encontra a aresta entre v1 e v2
               const aresta = arestas.filter(e => 
@@ -1516,13 +1529,13 @@
                 (e.data('source') === v2 && e.data('target') === v1)
               );
               
-              if (aresta.length) {
+              if (aresta.length && !cores[aresta[0].id()]) {
                 cores[aresta[0].id()] = cor;
               }
             }
             
-            // Rotação do círculo: primeiro vai para o final
-            // Isso faz cada vértice alternar como "centro"
+            // Rotação do círculo: primeiro vértice vai para o final
+            // Isso faz cada vértice ocupar todas as posições ao longo das rodadas
             circulo.push(circulo.shift());
           }
           
@@ -1614,7 +1627,7 @@
          * - Usa Round-Robin para grafos completos ímpares
          * - Usa Guloso para todos os outros casos
          * 
-         * @param {Object} coresVertices - Cores já atribuídas aos vértices
+         * @param {Object} coresVertices - Cores já atribuídas aos vértices (ignorado no guloso)
          * @returns {Object} Resultado da coloração
          */
         colorirArestasOtimizado(coresVertices = {}) {
@@ -1632,7 +1645,7 @@
           const ehCompleto = arestas.length === totalPossivel && !this.estado.orientado;
 
           // Para K_n ímpar, Round-Robin dá o resultado ótimo
-          if (ehCompleto && n % 2 === 1) {
+          if (ehCompleto && n % 2 === 1 && n >= 3) {
             registrarLog(`🔍 Grafo completo K${n} (ímpar) → usando Round-Robin`);
             return this.colorirArestasRoundRobin(arestas, vertices);
           }
@@ -1967,6 +1980,12 @@
             return;
           }
 
+          // Salva backup para restauração em caso de erro
+          const backup = {
+            elementos: this.cy.elements().jsons(),
+            estado: { ...this.estado }
+          };
+
           try {
             const linhas = texto.split(/\r?\n/).map(l => l.trim()).filter(l => l !== '');
             
@@ -1984,6 +2003,12 @@
 
             const orientado = metadados[0] === '1';
             const ponderado = metadados[1] === '1';
+
+            // Verifica se o grafo a importar excede o limite
+            if (numV > MAXIMO_VERTICES) {
+              exibirNotificacao(`O arquivo tem ${numV} vértices. Limite máximo é ${MAXIMO_VERTICES}.`, NOTIFICACAO.ERRO);
+              return;
+            }
 
             // Limpa grafo atual
             this.cy.elements().remove();
@@ -2017,6 +2042,11 @@
                 const destino = partes[1];
                 const peso = (partes.length >= 3 && ponderado) ? partes[2] : null;
 
+                // Verifica limite de vértices antes de criar
+                if (this.cy.nodes().length >= MAXIMO_VERTICES) {
+                  throw new Error(`Limite de ${MAXIMO_VERTICES} vértices atingido durante importação`);
+                }
+
                 // Cria vértices se não existirem
                 if (!this.cy.getElementById(origem).length) this.adicionarVertice(origem);
                 if (!this.cy.getElementById(destino).length) this.adicionarVertice(destino);
@@ -2044,7 +2074,19 @@
             exibirNotificacao(`Grafo carregado: ${this.cy.nodes().length}V, ${this.cy.edges().length}E`, NOTIFICACAO.SUCESSO);
           } catch (erro) {
             registrarLog(`❌ Erro ao importar: ${erro.message}`);
-            exibirNotificacao('Erro ao carregar arquivo', NOTIFICACAO.ERRO);
+            exibirNotificacao(`Erro ao carregar arquivo: ${erro.message}`, NOTIFICACAO.ERRO);
+            
+            // Restaura backup em caso de erro
+            try {
+              this.cy.elements().remove();
+              this.cy.add(backup.elementos);
+              this.estado = { ...this.estado, ...backup.estado };
+              this.atualizarEstiloArestas();
+              this.atualizarIndicadores();
+              registrarLog('🔄 Estado anterior restaurado com sucesso');
+            } catch (erroRestore) {
+              registrarLog('❌ Não foi possível restaurar o estado anterior');
+            }
           }
         }
 
@@ -2059,6 +2101,21 @@
         carregarModelo(tipo) {
           if (this.estado.executandoAnimacao) {
             registrarLog('⛔ Operação bloqueada durante animação');
+            return;
+          }
+
+          // Verifica se o modelo excede o limite (apenas para modelos conhecidos)
+          const limitesModelos = {
+            'completo5': 5,
+            'caminho5': 5,
+            'ciclo5': 5,
+            'bipartido': 6,
+            'simples': 4,
+            'margaridas': 20
+          };
+
+          if (limitesModelos[tipo] && limitesModelos[tipo] > MAXIMO_VERTICES) {
+            exibirNotificacao(`Este modelo tem ${limitesModelos[tipo]} vértices. Limite máximo é ${MAXIMO_VERTICES}.`, NOTIFICACAO.ERRO);
             return;
           }
 
@@ -2152,6 +2209,11 @@
             
             // Margaridas: grafo orientado complexo com 20 vértices
             'margaridas': () => {
+              if (20 > MAXIMO_VERTICES) {
+                registrarLog(`⚠️ Modelo Margaridas tem 20 vértices, mas o limite é ${MAXIMO_VERTICES}`);
+                return;
+              }
+              
               this.estado.orientado = true;
               if (pegarElemento('selTipo')) pegarElemento('selTipo').value = 'orientado';
               
@@ -2214,25 +2276,29 @@
          * @returns {Object} {vertice: [{para: destino, peso: valor}]}
          */
         obterListaAdjacencia() {
-          const adjacencias = {};
-          this.cy.nodes().forEach(no => {
-            adjacencias[no.id()] = [];
-          });
+		  const adjacencias = {};
+		  this.cy.nodes().forEach(no => {
+			adjacencias[no.id()] = [];
+		  });
 
-          this.cy.edges().forEach(e => {
-            const origem = e.data('source');
-            const destino = e.data('target');
-            const peso = e.data('label') ? Number(e.data('label')) : null;
-            
-            adjacencias[origem].push({ para: destino, peso: peso });
-            // Para grafos não orientados, adiciona a aresta reversa
-            if (!this.estado.orientado && origem !== destino) {
-              adjacencias[destino].push({ para: origem, peso: peso });
-            }
-          });
+		  this.cy.edges().forEach(e => {
+			const origem = e.data('source');
+			const destino = e.data('target');
+			const peso = e.data('label') ? Number(e.data('label')) : null;
+			
+			// Para coloração de vértices, consideramos que
+			// a existência de arco em QUALQUER DIREÇÃO gera restrição
+			adjacencias[origem].push({ para: destino, peso: peso });
+			
+			// Mesmo em grafos orientados, adicionamos a aresta reversa
+			// para que o vértice destino também saiba que é vizinho da origem
+			if (origem !== destino) {
+			  adjacencias[destino].push({ para: origem, peso: peso });
+			}
+		  });
 
-          return adjacencias;
-        }
+		  return adjacencias;
+		}
 
         /** Atualiza todos os indicadores estatísticos na interface */
         atualizarIndicadores() {
